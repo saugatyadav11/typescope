@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "TypoScope — Typography Highlighter",
+  "version": "0.1.0",
+  "description": "Scan a page, group text by typography, and color-code highlights using Tailwind hues.",
+  "action": {
+    "default_title": "TypoScope",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["contentScript.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}

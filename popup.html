@@ -1,0 +1,283 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>TypeScope</title>
+  <style>
+    :root{ --card-bg:#F2F2F2; --text-hi:#000; }
+
+    /* Restore fixed width/height, remove resize bar */
+    html,body{margin:0;padding:0;width:440px;min-width:0;min-height:0;background:transparent;}
+    body{
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      font-smooth: never;
+    }
+    body.results .ts-card{ max-height:680px; overflow:auto; }
+
+    .ts-card{
+      width:440px;
+      background:#F2F2F2;
+      border-radius:0px; /* Rounded corners */
+      padding:12px; box-sizing:border-box;
+      display:flex; flex-direction:column; gap:12px;
+      overflow: auto;
+      position: relative;
+      min-width:0; min-height:0;
+      transition: none;
+      height: auto !important;
+      min-height: 0 !important;
+    }
+    /* Remove .resize-bar styles */
+    .resize-bar { display: none !important; }
+
+    /* Remove extra bottom padding from .actions and .row-actions if present */
+    .row-actions { padding-bottom: 0 !important; }
+    .actions { padding-bottom: 0 !important; }
+
+    /* Header: fixed height 48px; 3 columns keep logo centered */
+    .row-header{
+      display:grid; grid-template-columns:32px 1fr 32px; align-items:center;
+      height:48px; padding:0px 12px;
+    }
+    .brand{ line-height:0; display:flex; justify-content:center; }
+    .brand svg{ display:block; }
+
+    /* circular icon buttons (results state) */
+    .iconbtn{
+      width:32px;height:32px;border-radius:999px;border:0;background:transparent;
+      display:flex;align-items:center;justify-content:center;cursor:pointer;
+    }
+    .iconbtn:hover{ background:#D9D9D9;}
+    .icon{line-height:0;display:inline-flex;}
+
+    /* Default actions (0 padding, 4px gap) */
+    .row-actions{ padding:0; }
+    .actions{ display:flex; flex-direction:column; gap:6px; }
+    .btn{ display:flex; height:48px; align-items:center; justify-content:center; gap:6px; border-radius:888px; border:0; cursor:pointer; }
+    .btn .label{ font:500 16px/20px Inter; letter-spacing:-0.28px; }
+    .btn-scan-page{ padding:0 12px 0 10px; background:#000; color:#fff; }
+    .btn-scan-page:hover{ background:#1E1E1E; }
+    .btn-scan-section{ padding:0 12px; background:#E0E0E0; }
+    .btn-scan-section .label{ color:var(--text-hi); color:color(display-p3 0.2392 0.2392 0.2392); }
+    .btn-scan-section:hover{ background:#D9D9D9;}
+
+    /* Results list container: NO fill, NO shadow */
+    .list{
+      display:flex; flex-direction:column; gap:4px;
+      background:transparent; box-shadow:none; border-radius:0;
+      overflow:auto; max-height:520px;
+    }
+
+    /* Each result row is its own white card (your spec) */
+    .item{
+      display:flex; padding:12px; align-items:flex-start; gap:12px; align-self:stretch;
+      border-radius:20px; background:#FFF;
+      background: color(display-p3 1 1 1);
+      cursor:pointer;
+    }
+
+    /* Size badge: 62x62; size text 18/24/-0.18; “px” keeps 10px */
+    .sizebox{ width:62px; height:62px; border-radius:16px; color:#fff; display:flex; align-items:center; justify-content:center; gap:2px; }
+    .sizebox .num{
+      color:#FFF; color: color(display-p3 1 1 1);
+      text-align:center; font-family:Inter; font-size:18px; font-style:normal; font-weight:400;
+      line-height:24px; letter-spacing:-0.18px;
+    }
+    .sizebox .unit{
+      color:#FFF; color: color(display-p3 1 1 1);
+      text-align:center; font-family:Inter; font-size:10px; font-style:normal; font-weight:500; line-height:10px; letter-spacing:-0.1px;
+      transform:translateY(2px);
+    }
+
+    /* pill rows: 6px gaps */
+    .right{ display:flex; flex-direction:column; gap:6px; flex:1; }
+    .pills{ display:flex; flex-wrap:wrap; gap:4px; }
+    .pill{ display:flex; padding:6px 12px 6px 10px; align-items:center; gap:6px; border-radius:43px; background:#F5F5F5; color:var(--text-hi); }
+    .pill .label{ font:450 12px/16px Inter; letter-spacing:0px; }
+
+    /* Checkbox */
+    .chk{
+      width:20px; height:20px; border-radius:8px; display:flex; align-items:center; justify-content:center;
+      border:1px solid rgba(34,34,34,0.10); background:transparent; flex:0 0 20px;
+      transition:border-color .12s ease, background .12s ease, border-radius .18s cubic-bezier(.4,0,.2,1);
+      position:relative;
+      overflow:hidden;
+    }
+    .item:hover .chk:not(.on){ border-radius:888px; border-color:rgba(34,34,34,0.14); }
+    .chk.on{ border-radius:888px; background:#000; border-color:transparent; }
+    .chk svg{
+      display:block;
+      position: absolute;
+      left: 50%; top: 50%;
+      transform: translate(-50%,-50%) scale(1);
+      opacity: 1;
+      pointer-events: none;
+    }
+    .chk:not(.on) svg{
+      opacity: 0;
+      transform: translate(-50%,-50%) scale(1);
+    }
+
+    /* color picker */
+    .picker{ position:fixed; display:none; background:#fff; border:1px solid #e2e8f0; padding:6px; border-radius:10px;
+             box-shadow:0 10px 20px rgba(0,0,0,.15); grid-template-columns:repeat(5,44px); gap:6px; z-index:2147483647; }
+    .picker .hue{ width:44px; height:38px; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; cursor:pointer; }
+
+    /* Tooltip styles (overridden by content script, but for reference if needed) */
+    .tooltip {
+      position: absolute;
+      z-index: 2147483647;
+      display: flex;
+      padding: 8px 12px;
+      max-width: 200px;
+      width: fit-content;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.75);
+      border-radius: 8px;
+      font: 400 14px/20px Inter;
+      line-height: 1.4;
+      white-space: nowrap;
+      pointer-events: none;
+      transform: translateY(-8px);
+      opacity: 0;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    .tooltip.on {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .tooltip .label {
+      font-weight: 500;
+      letter-spacing: -0.2px;
+    }
+    .tooltip .key {
+      font-family: monospace;
+      font-size: 12px;
+      padding: 2px 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="ts-card">
+    <!-- Header (48px, centered logo). Default: no buttons. Results: back + reset icon buttons. -->
+    <div class="row-header">
+      <button id="btnBack" class="iconbtn" title="Back" style="visibility:hidden;">
+        <span class="icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M9.99996 13.3334L4.66663 8.00009L9.99996 2.66675" stroke="#3D3D3D" stroke-width="2" stroke-linecap="square"/>
+          </svg>
+        </span>
+      </button>
+      <div class="brand" aria-label="TypeScope">
+        <!-- LOGO -->
+        <svg width="102" height="20" viewBox="0 0 102 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M4.46 15.6301V3.45012H0V1.13012H11.8V3.45012H7.32V15.6301H4.46Z" fill="black"/>
+          <path d="M12.1669 19.1301H11.0069V17.0101H12.0469C12.9669 17.0101 13.3669 17.0301 13.8469 15.8901L13.9669 15.5901L9.84687 4.87012H12.8669L15.3069 12.6301L17.8069 4.87012H20.6069L16.6669 15.3101C15.3869 18.6501 14.8469 19.1301 12.1669 19.1301Z" fill="black"/>
+          <path d="M26.4286 13.7701C27.8686 13.7701 28.8886 12.3701 28.8886 10.2701C28.8886 8.17012 27.8686 6.75012 26.4286 6.75012C24.9086 6.75012 23.9086 8.09012 23.9086 10.2501C23.9086 12.4701 24.9086 13.7701 26.4286 13.7701ZM24.0086 19.1301H21.2486V4.87012H24.0086V6.25012C24.5886 5.23012 25.7486 4.63012 27.1086 4.63012C29.7086 4.63012 31.7886 6.87012 31.7886 10.2501C31.7886 13.6901 29.6486 15.8901 27.0886 15.8901C25.9686 15.8901 24.7086 15.4701 24.0086 14.2701V19.1301Z" fill="black"/>
+          <path d="M43.1091 11.0101H35.1691C35.3291 12.8501 36.5691 13.7501 37.8891 13.7501C38.7491 13.7501 39.5891 13.4501 40.1491 12.5101H42.9891C42.4091 14.1101 40.8491 15.8901 37.9091 15.8901C34.4491 15.8901 32.4291 13.3101 32.4291 10.2101C32.4291 7.01012 34.6491 4.63012 37.8291 4.63012C41.1491 4.63012 43.2091 7.21012 43.1091 11.0101ZM37.8091 6.65012C36.7691 6.65012 35.4291 7.29012 35.2091 9.11012H40.3091C40.2491 7.29012 38.9691 6.65012 37.8091 6.65012Z" fill="black"/>
+          <path d="M50.0469 9.61012L48.2069 9.27012C45.8669 8.79012 43.8669 7.59012 43.8669 5.07012C43.8669 2.15012 46.9869 0.870117 49.6469 0.870117C52.6469 0.870117 55.1869 2.63012 55.3469 5.41012H52.5869C52.3669 3.71012 50.8869 3.15012 49.5269 3.15012C48.1869 3.15012 46.7269 3.65012 46.7269 4.95012C46.7269 5.97012 47.5669 6.53012 48.7469 6.75012L50.6469 7.09012C53.0069 7.53012 55.6069 8.43012 55.6069 11.4501C55.6069 14.4301 52.6469 15.8901 49.7269 15.8901C46.1669 15.8901 43.8069 13.9701 43.5469 10.8501H46.3069C46.6269 12.9901 48.1069 13.6101 49.8269 13.6101C51.1069 13.6101 52.7269 13.1301 52.7269 11.5901C52.7269 10.3701 51.5869 9.87012 50.0469 9.61012Z" fill="black"/>
+          <path d="M61.922 4.63012C64.182 4.63012 66.422 5.89012 66.802 8.55012H64.162C63.942 7.51012 62.982 6.77012 61.922 6.77012C60.482 6.77012 59.342 7.99012 59.342 10.2301C59.342 12.4901 60.422 13.7501 61.942 13.7501C62.902 13.7501 63.882 13.2501 64.262 11.9701H66.902C66.262 14.9101 64.042 15.8901 61.802 15.8901C58.582 15.8901 56.522 13.5301 56.522 10.2701C56.522 6.99012 58.702 4.63012 61.922 4.63012Z" fill="black"/>
+          <path d="M72.7278 6.79012C71.2078 6.79012 70.1278 8.01012 70.1278 10.2701C70.1278 12.5301 71.2078 13.7301 72.7278 13.7301C74.2478 13.7301 75.3278 12.5301 75.3278 10.2701C75.3278 8.01012 74.2478 6.79012 72.7278 6.79012ZM72.7278 15.8901C70.0078 15.8901 67.3278 14.0301 67.3278 10.2701C67.3278 6.49012 70.0078 4.63012 72.7278 4.63012C75.4478 4.63012 78.1278 6.49012 78.1278 10.2701C78.1278 14.0301 75.4478 15.8901 72.7278 15.8901Z" fill="black"/>
+          <path d="M84.4638 13.7701C85.9038 13.7701 86.9238 12.3701 86.9238 10.2701C86.9238 8.17012 85.9038 6.75012 84.4638 6.75012C82.9438 6.75012 81.9438 8.09012 81.9438 10.2501C81.9438 12.4701 82.9438 13.7701 84.4638 13.7701ZM82.0438 19.1301H79.2838V4.87012H82.0438V6.25012C82.6238 5.23012 83.7838 4.63012 85.1438 4.63012C87.7438 4.63012 89.8238 6.87012 89.8238 10.2501C89.8238 13.6901 87.6838 15.8901 85.1238 15.8901C84.0038 15.8901 82.7438 15.4701 82.0438 14.2701V19.1301Z" fill="black"/>
+          <path d="M101.144 11.0101H93.2042C93.3642 12.8501 94.6042 13.7501 95.9242 13.7501C96.7842 13.7501 97.6242 13.4501 98.1842 12.5101H101.024C100.444 14.1101 98.8842 15.8901 95.9442 15.8901C92.4842 15.8901 90.4642 13.3101 90.4642 10.2101C90.4642 7.01012 92.6842 4.63012 95.8642 4.63012C99.1842 4.63012 101.244 7.21012 101.144 11.0101ZM95.8442 6.65012C94.8042 6.65012 93.4642 7.29012 93.2442 9.11012H98.3442C98.2842 7.29012 97.0042 6.65012 95.8442 6.65012Z" fill="black"/>
+        </svg>
+      </div>
+      <!-- right slot: hidden by default, becomes reset button in results -->
+      <button id="btnRight" class="iconbtn" title="Reset" style="visibility:hidden;">
+        <span class="icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M13.173 9.83333C12.418 11.9695 10.3807 13.5 7.98596 13.5C4.9484 13.5 2.48596 11.0376 2.48596 8C2.48596 4.96243 4.9484 2.5 7.98596 2.5C9.86407 2.5 11.1193 3.30292 12.3333 4.6726M12.8333 2.66667V5.33333H10.1666" stroke="#3D3D3D" stroke-width="1.5" stroke-linecap="square"/>
+          </svg>
+        </span>
+      </button>
+    </div>
+    <!-- everything else mounts here -->
+    <div id="mount"></div>
+  </div>
+  <script src="popup.js"></script>
+  <script>
+    // Remove all resizing logic
+  </script>
+</body>
+</html>
+  </script>
+</body>
+</html>
+        </span>
+      </button>
+    </div>
+
+    <!-- everything else mounts here -->
+    <div id="mount"></div>
+    <div class="resize-bar" title="Resize height"></div>
+  </div>
+  <script src="popup.js"></script>
+  <script>
+    // --- Resizing logic for bottom bar (height) and width (side drag) ---
+    const card = document.querySelector('.ts-card');
+    const resizeBar = document.querySelector('.resize-bar');
+    let startY, startHeight, startX, startWidth, resizing = false, resizingW = false;
+
+    // Restore size from localStorage
+    (() => {
+      const h = +localStorage.getItem('ts-popup-height');
+      const w = +localStorage.getItem('ts-popup-width');
+      if (h > 320) card.style.height = h + 'px';
+      if (w > 320) card.style.width = w + 'px';
+    })();
+
+    // Height resize (bottom bar)
+    resizeBar.addEventListener('mousedown', e => {
+      resizing = true;
+      startY = e.clientY;
+      startHeight = card.offsetHeight;
+      document.body.style.userSelect = 'none';
+    });
+    window.addEventListener('mousemove', e => {
+      if (!resizing) return;
+      let newHeight = Math.max(320, startHeight + (e.clientY - startY));
+      card.style.height = newHeight + 'px';
+    });
+    window.addEventListener('mouseup', e => {
+      if (resizing) {
+        resizing = false;
+        document.body.style.userSelect = '';
+        localStorage.setItem('ts-popup-height', parseInt(card.offsetHeight, 10));
+      }
+    });
+
+    // Width resize (right edge, no handle, drag near right edge)
+    card.addEventListener('mousedown', e => {
+      if (e.offsetX > card.offsetWidth - 12) {
+        resizingW = true;
+        startX = e.clientX;
+        startWidth = card.offsetWidth;
+        document.body.style.userSelect = 'none';
+      }
+    });
+    window.addEventListener('mousemove', e => {
+      if (!resizingW) return;
+      let newWidth = Math.max(320, startWidth + (e.clientX - startX));
+      card.style.width = newWidth + 'px';
+    });
+    window.addEventListener('mouseup', e => {
+      if (resizingW) {
+        resizingW = false;
+        document.body.style.userSelect = '';
+        localStorage.setItem('ts-popup-width', parseInt(card.offsetWidth, 10));
+      }
+    });
+  </script>
+</body>
+</html>
+  </script>
+</body>
+</html>
+  </script>
+</body>
+</html>
