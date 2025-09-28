@@ -2,8 +2,8 @@
 // Popup is the only UI container. This script draws on-page badges + tooltip.
 
 (() => {
-  if (window.__typoscopeLoaded) return;
-  window.__typoscopeLoaded = true;
+  if (window.__typescopeLoaded) return;
+  window.__typescopeLoaded = true;
 
   const STATE = {
     groups: [],
@@ -14,6 +14,17 @@
     tooltipEl: null,
     rafPending: false,
     lastScanHash: null,
+    elementSelections: [],
+    elementSelectionMap: new Map(),
+    elementSelectionStyleEl: null,
+    elementPicking: false,
+    elementTip: null,
+    elementClickHandler: null,
+    elementKeyHandler: null,
+    elementPrevCursor: '',
+    elementHoverEl: null,
+    elementMoveHandler: null,
+    pickerManualTooltip: false,
 
     // Tunables
     sizeStep: 0.25,          // quantization
@@ -139,7 +150,7 @@
   /* ---------------- styles (hover outline / tooltip / badges) ---------------- */
   function ensureStyleEl(){
     if(STATE.styleEl && STATE.styleEl.isConnected) return STATE.styleEl;
-    const el=document.createElement('style'); el.id='typoscope-style'; document.documentElement.appendChild(el); STATE.styleEl=el; return el;
+    const el=document.createElement('style'); el.id='typescope-style'; document.documentElement.appendChild(el); STATE.styleEl=el; return el;
   }
   function applyStyles(){
     const styleEl=ensureStyleEl();
@@ -148,38 +159,38 @@
       const c600=TAILWIND[g.hue||'neutral'][600] || '#000';
       const fg = TAILWIND[g.hue||'neutral'][50] || '#fff';
       parts.push(`
-        [data-typoscope][data-typo-group="${idx}"][data-typo-active="true"]:hover{
+        [data-typescope][data-typo-group="${idx}"][data-typo-active="true"]:hover{
           outline:2px dotted ${c600}!important; outline-offset:2px!important;
         }
-        .typoscope-badge[data-group="${idx}"]{
+        .typescope-badge[data-group="${idx}"]{
           background:${c600}!important;
           color:${fg}!important;
         }
       `);
     });
     parts.push(`
-      #typoscope-tooltip{
+      #typescope-tooltip{
         position:fixed;top:0;left:0;transform:translate(-9999px,-9999px);z-index:2147483647;pointer-events:none;
         font:12px/1.35 Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-        background:rgba(15,15,26,0.64); /* #0F0F1A with 64% opacity */
-        color:#fff; border:1px solid rgba(255, 255, 255, 0.12);
+        background:rgba(0, 0, 0, 0.64); 
+        color:#fff; border:1px solid rgba(255, 255, 255, 0.24);
         padding:12px 12px; border-radius:12px; white-space:nowrap; box-shadow:0 6px 16px rgba(0,0,0,.2);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
       }
-      #typoscope-tooltip .row{display:flex;gap:16px;margin-bottom:10px;}
-      #typoscope-tooltip .row:last-child{margin-bottom:0;}
-      #typoscope-tooltip .label{color:#fff;min-width:86px;}
-      #typoscope-tooltip .val{color:#fff;font-weight:500;}
-      #typoscope-badge-layer{position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:2147483646;}
-      .typoscope-badge{position:absolute;min-width:22px;height:22px;padding:0 4px;border-radius:8px;font:11px/22px Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif;text-align:center;font-weight:800;box-shadow:0 1px 3px rgba(0,0,0,.25);}
+      #typescope-tooltip .row{display:flex;gap:16px;margin-bottom:10px;}
+      #typescope-tooltip .row:last-child{margin-bottom:0;}
+      #typescope-tooltip .label{color:#fff;min-width:86px;}
+      #typescope-tooltip .val{color:#fff;font-weight:500;}
+      #typescope-badge-layer{position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:2147483646;}
+      .typescope-badge{position:absolute;min-width:22px;height:22px;padding:0 2px;border-radius:88px;font:12px/22px Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif;text-align:center;font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.25);}
     `);
     styleEl.textContent = parts.join('\n');
   }
 
   /* badges */
   function ensureBadgeLayer(){ if(STATE.badgeLayer&&STATE.badgeLayer.isConnected) return STATE.badgeLayer;
-    const d=document.createElement('div'); d.id='typoscope-badge-layer'; document.body.appendChild(d); STATE.badgeLayer=d; return d;}
+    const d=document.createElement('div'); d.id='typescope-badge-layer'; document.body.appendChild(d); STATE.badgeLayer=d; return d;}
   function buildBadges(){
     const layer=ensureBadgeLayer(); layer.innerHTML='';
     STATE.groups.forEach((g,idx)=>{
@@ -187,7 +198,7 @@
       const fg = TAILWIND[g.hue||'neutral'][50] || '#fff';
       g.badges=[];
       g.elements.forEach(el=>{
-        const b=document.createElement('div'); b.className='typoscope-badge'; b.dataset.group=String(idx);
+        const b=document.createElement('div'); b.className='typescope-badge'; b.dataset.group=String(idx);
         b.style.background=bg;
         b.style.color=fg;
         b.textContent=String(Math.round(g.sizePx)); b.style.display=g.active?'block':'none';
@@ -225,54 +236,284 @@
   }
 
   /* tooltip */
+  function tooltipContentForElement(el){
+    const cs=getComputedStyle(el);
+    const fam=normalizeFamily(cs.fontFamily);
+    const w=(cs.fontWeight==='normal')?'400':(cs.fontWeight==='bold')?'700':cs.fontWeight;
+    const fs=parsePxFloat(cs.fontSize,0);
+    const lh=deriveLine(cs,fs);
+    const ls=cs.letterSpacing==='normal'?0:parsePxFloat(cs.letterSpacing,0);
+    return `
+      <div class="row"><span class="label">Font</span><span class="val">${fam}, ${weightName(w)} (${w})</span></div>
+      <div class="row"><span class="label">Text size</span><span class="val">${fmtPx(fs)}</span></div>
+      <div class="row"><span class="label">Line height</span><span class="val">${fmtPx(lh)}</span></div>
+      <div class="row"><span class="label">Letter spacing</span><span class="val">${fmtPx(ls)}</span></div>`;
+  }
+
+  function positionTooltip(cx,cy){
+    if(!STATE.tooltipEl) return;
+    const pad=8, rect=STATE.tooltipEl.getBoundingClientRect();
+    let x=cx+12, y=cy+12;
+    if(x+rect.width+pad>window.innerWidth) x=cx-rect.width-12;
+    if(y+rect.height+pad>window.innerHeight) y=cy-rect.height-12;
+    STATE.tooltipEl.style.transform=`translate(${Math.max(0,x)}px,${Math.max(0,y)}px)`;
+  }
+
+  function showTooltipForElement(el,cx,cy){
+    initTooltip();
+    if(!STATE.tooltipEl) return;
+    STATE.tooltipEl.innerHTML = tooltipContentForElement(el);
+    positionTooltip(cx,cy);
+  }
+
+  function hideTooltip(){
+    if(STATE.tooltipEl) STATE.tooltipEl.style.transform='translate(-9999px,-9999px)';
+  }
+
   function initTooltip(){
-    if(STATE.tooltipEl) return;
-    const tip=document.createElement('div'); tip.id='typoscope-tooltip'; document.body.appendChild(tip); STATE.tooltipEl=tip;
-    function showFor(el,e){
-      const cs=getComputedStyle(el); const fam=normalizeFamily(cs.fontFamily);
-      const w=(cs.fontWeight==='normal')?'400':(cs.fontWeight==='bold')?'700':cs.fontWeight;
-      const fs=parsePxFloat(cs.fontSize,0); const lh=deriveLine(cs,fs);
-      const ls=cs.letterSpacing==='normal'?0:parsePxFloat(cs.letterSpacing,0);
-      tip.innerHTML = `
-        <div class="row"><span class="label">Font</span><span class="val">${fam}, ${weightName(w)} (${w})</span></div>
-        <div class="row"><span class="label">Text size</span><span class="val">${fmtPx(fs)}</span></div>
-        <div class="row"><span class="label">Line height</span><span class="val">${fmtPx(lh)}</span></div>
-        <div class="row"><span class="label">Letter spacing</span><span class="val">${fmtPx(ls)}</span></div>`;
-      positionTip(e.clientX,e.clientY);
-    }
-    function positionTip(cx,cy){
-      const pad=8, rect=STATE.tooltipEl.getBoundingClientRect();
-      let x=cx+12, y=cy+12; if(x+rect.width+pad>window.innerWidth) x=cx-rect.width-12; if(y+rect.height+pad>window.innerHeight) y=cy-rect.height-12;
-      STATE.tooltipEl.style.transform=`translate(${Math.max(0,x)}px,${Math.max(0,y)}px)`;
-    }
+    if(STATE.tooltipEl && STATE.tooltipEl.isConnected) return STATE.tooltipEl;
+    const tip=document.createElement('div'); tip.id='typescope-tooltip'; document.body.appendChild(tip); STATE.tooltipEl=tip;
     document.addEventListener('mousemove',e=>{
-      const el=e.target&&e.target.closest&&e.target.closest('[data-typoscope][data-typo-active="true"]');
-      if(!el){ STATE.tooltipEl.style.transform='translate(-9999px,-9999px)'; return; }
-      showFor(el,e);
+      if (STATE.pickerManualTooltip) return;
+      const el=e.target&&e.target.closest&&e.target.closest('[data-typescope][data-typo-active="true"]');
+      if(!el){ hideTooltip(); return; }
+      showTooltipForElement(el,e.clientX,e.clientY);
     });
+    return tip;
   }
 
   /* scanning + summary */
-  function clearAll(){
-    document.querySelectorAll('[data-typoscope]').forEach(el=>{el.removeAttribute('data-typoscope');el.removeAttribute('data-typo-group');el.removeAttribute('data-typo-active');el.style.transform='';el.style.transition='';});
+  function clearAll(opts = {}){
+    const { preservePicker = false } = opts;
+    document.querySelectorAll('[data-typescope]').forEach(el=>{el.removeAttribute('data-typescope');el.removeAttribute('data-typo-group');el.removeAttribute('data-typo-active');el.style.transform='';el.style.transition='';});
     if(STATE.styleEl && STATE.styleEl.parentNode) STATE.styleEl.parentNode.removeChild(STATE.styleEl); STATE.styleEl=null;
     if(STATE.badgeLayer && STATE.badgeLayer.parentNode) STATE.badgeLayer.parentNode.removeChild(STATE.badgeLayer); STATE.badgeLayer=null;
     if(STATE.tooltipEl && STATE.tooltipEl.parentNode) STATE.tooltipEl.parentNode.removeChild(STATE.tooltipEl); STATE.tooltipEl=null;
     STATE.groups=[]; STATE.groupsInitialSnapshot=[]; STATE.totalElements=0;
+    if (preservePicker) {
+      clearElementSelections({ preserveHandlers: true });
+    } else {
+      clearElementSelections();
+    }
 
     window.removeEventListener('scroll',scheduleBadgePositioning,true);
     window.removeEventListener('resize',scheduleBadgePositioning,true);
     detachEscListener(); // <--- add
   }
 
-  function scan(rootEl=null){
-    clearAll();
+  function ensureSelectionStyle(){
+    if (STATE.elementSelectionStyleEl && STATE.elementSelectionStyleEl.isConnected) return;
+    const style = document.createElement('style');
+    style.id = 'typescope-selection-style';
+    style.textContent = `
+      [data-typescope-element]{
+        outline:1px dashed rgba(14,165,233,0.85)!important;
+        outline-offset:2px!important;
+        position:relative!important;
+      }
+      [data-typescope-element]::after{
+        content: attr(data-typescope-element-size);
+        position:absolute;
+        top:-24px;
+        left:0;
+        background:#0ea5e9;
+        color:#fff;
+        font:600 11px/1 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        padding:2px 6px;
+        border-radius:999px;
+        box-shadow:0 2px 6px rgba(14,165,233,0.25);
+        pointer-events:none;
+        white-space:nowrap;
+      }
+      [data-typescope-hover]{
+        outline:2px solid rgba(129,140,248,0.9)!important;
+        outline-offset:1px!important;
+      }
+    `;
+    document.documentElement.appendChild(style);
+    STATE.elementSelectionStyleEl = style;
+  }
+
+  function clearElementSelections(opts = {}){
+    const { preserveHandlers = false } = opts;
+
+    if (STATE.elementSelectionMap) {
+      STATE.elementSelectionMap.forEach(entry => {
+        if (!entry || !entry.elements) return;
+        entry.elements.forEach(el => {
+          if (el && el.isConnected) {
+            el.removeAttribute('data-typescope-element');
+            el.removeAttribute('data-typescope-element-size');
+          }
+        });
+      });
+      STATE.elementSelectionMap = new Map();
+    }
+
+    if (STATE.elementHoverEl && STATE.elementHoverEl.isConnected) {
+      STATE.elementHoverEl.removeAttribute('data-typescope-hover');
+    }
+    STATE.elementHoverEl = null;
+
+    STATE.elementSelections = [];
+
+    if (!preserveHandlers) {
+      STATE.pickerManualTooltip = false;
+      hideTooltip();
+      if (STATE.elementTip && STATE.elementTip.remove) STATE.elementTip.remove();
+      STATE.elementTip = null;
+
+      if (STATE.elementClickHandler) document.removeEventListener('click', STATE.elementClickHandler, true);
+      if (STATE.elementKeyHandler) document.removeEventListener('keydown', STATE.elementKeyHandler, true);
+      if (STATE.elementMoveHandler) document.removeEventListener('mousemove', STATE.elementMoveHandler, true);
+      STATE.elementClickHandler = null;
+      STATE.elementKeyHandler = null;
+      STATE.elementMoveHandler = null;
+      STATE.elementPicking = false;
+      if (STATE.elementPrevCursor !== null) {
+        document.documentElement.style.cursor = STATE.elementPrevCursor || '';
+        STATE.elementPrevCursor = '';
+      }
+      if (STATE.elementSelectionStyleEl && STATE.elementSelectionStyleEl.isConnected) {
+        STATE.elementSelectionStyleEl.remove();
+      }
+      STATE.elementSelectionStyleEl = null;
+    }
+
+    chrome.runtime.sendMessage({ type:'typescope:elementSelectionUpdate', payload:{ items: STATE.elementSelections.slice() } });
+  }
+
+  function elementHasVisibleText(el){
+    if (!el || !(el instanceof Element)) return false;
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
+      acceptNode(node){
+        if (!node || !node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    return !!walker.nextNode();
+  }
+
+  function findTextElement(node){
+    let el = node instanceof Element ? node : node?.parentElement;
+    while (el && el !== document.body) {
+      if (elementHasVisibleText(el)) return el;
+      el = el.parentElement;
+    }
+    return null;
+  }
+
+  function recordElementSelection(el){
+    if (!el || !(el instanceof Element) || el === document.body || el === document.documentElement) return;
+
+    scan(el, { preservePicker: true, append: true });
+    chrome.runtime.sendMessage({ type:'typescope:summary', payload: summarize(), source: 'element' });
+    chrome.runtime.sendMessage({ type:'typescope:openPopup' });
+  }
+
+  function startElementCollector(){
+    if (STATE.elementPicking) return;
+    STATE.elementPicking = true;
+
+    const tip = document.createElement('div');
+    tip.textContent = 'Click text nodes to capture typography • Esc to finish';
+    Object.assign(tip.style, {
+      position:'fixed',
+      top:'12px',
+      left:'50%',
+      transform:'translateX(-50%)',
+      zIndex:'2147483647',
+      background:'rgba(15,23,42,0.92)',
+      color:'#fff',
+      padding:'6px 10px',
+      borderRadius:'8px',
+      font:'12px Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif',
+      border:'1px solid rgba(148,163,184,.6)',
+      pointerEvents:'none',
+    });
+    document.body.appendChild(tip);
+    STATE.elementTip = tip;
+
+    STATE.elementPrevCursor = document.documentElement.style.cursor || '';
+    document.documentElement.style.cursor = 'crosshair';
+
+    const moveHandler = (e) => {
+      const target = e.target instanceof Element ? e.target : null;
+      const el = findTextElement(target);
+      if (STATE.elementHoverEl && STATE.elementHoverEl !== el) {
+        STATE.elementHoverEl.removeAttribute('data-typescope-hover');
+        STATE.elementHoverEl = null;
+      }
+      if (el) {
+        ensureSelectionStyle();
+        el.setAttribute('data-typescope-hover','');
+        STATE.elementHoverEl = el;
+        showTooltipForElement(el, e.clientX, e.clientY);
+      } else if (STATE.pickerManualTooltip) {
+        hideTooltip();
+      }
+    };
+
+    const clickHandler = (e) => {
+      const target = STATE.elementHoverEl || (e.target instanceof Element ? e.target : null);
+      const el = findTextElement(target);
+      if (!el) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+      recordElementSelection(el);
+    };
+
+    const keyHandler = (e) => {
+      if (e.key === 'Escape') {
+        if (STATE.elementTip && STATE.elementTip.remove) STATE.elementTip.remove();
+        STATE.elementTip = null;
+      if (STATE.elementHoverEl && STATE.elementHoverEl.isConnected) {
+        STATE.elementHoverEl.removeAttribute('data-typescope-hover');
+      }
+      STATE.elementHoverEl = null;
+      document.removeEventListener('click', clickHandler, true);
+        document.removeEventListener('keydown', keyHandler, true);
+        document.removeEventListener('mousemove', moveHandler, true);
+        STATE.elementClickHandler = null;
+        STATE.elementKeyHandler = null;
+        STATE.elementMoveHandler = null;
+        STATE.elementPicking = false;
+        document.documentElement.style.cursor = STATE.elementPrevCursor || '';
+        STATE.elementPrevCursor = '';
+        STATE.pickerManualTooltip = false;
+        hideTooltip();
+      }
+    };
+
+    STATE.elementClickHandler = clickHandler;
+    STATE.elementKeyHandler = keyHandler;
+    STATE.elementMoveHandler = moveHandler;
+    document.addEventListener('click', clickHandler, true);
+    document.addEventListener('keydown', keyHandler, true);
+    document.addEventListener('mousemove', moveHandler, true);
+    initTooltip();
+    STATE.pickerManualTooltip = true;
+  }
+
+  function scan(rootEl=null, opts = {}){
+    const { preservePicker = false, append = false } = opts;
+    const shouldAppend = append && STATE.groups && STATE.groups.length > 0;
+
+    if (!shouldAppend) {
+      clearAll({ preservePicker });
+    }
+
+    if (!Array.isArray(STATE.groups)) STATE.groups = [];
+    if (!Array.isArray(STATE.groupsInitialSnapshot)) STATE.groupsInitialSnapshot = [];
+    if (typeof STATE.totalElements !== 'number') STATE.totalElements = 0;
 
     const root=rootEl||document.body;
     const elements=getAllTextElements(8000,root);
     const sizeMap=new Map();
 
     elements.forEach(el=>{
+      if (shouldAppend && el.hasAttribute('data-typescope')) return;
       const cs=getComputedStyle(el); const fam=normalizeFamily(cs.fontFamily);
       let weight=cs.fontWeight; if(weight==='normal') weight='400'; if(weight==='bold') weight='700';
       const fs=parsePxFloat(cs.fontSize,0), bucket=quantizeSize(fs,STATE.sizeStep);
@@ -290,36 +531,101 @@
       g.familiesCount.set(fam,(g.familiesCount.get(fam)||0)+1);
     });
 
-    let groups=[...sizeMap.values()].sort((a,b)=>a.sizePx-b.sizePx);
+    let groups=[...sizeMap.values()].filter(g=>g.elements.length>0).sort((a,b)=>a.sizePx-b.sizePx);
+    if (!groups.length) {
+      if (!shouldAppend) {
+        STATE.groups = [];
+        STATE.groupsInitialSnapshot = [];
+        STATE.totalElements = 0;
+      }
+      return;
+    }
     groups=mergeCloseSizes(groups, STATE.mergeTolerance);
     suppressNearSizes(groups, STATE.nearSizeTolerance);
 
     const hueMap=computeHueMapForActive(groups);
     groups.forEach(g=>{ if(g.active) g.hue = hueMap.get(g.sizePx)||'slate'; });
 
-    groups.forEach((g,idx)=>{
-      g.elements.forEach(el=>{
-        el.setAttribute('data-typoscope',''); el.setAttribute('data-typo-group', String(idx)); el.setAttribute('data-typo-active', g.active?'true':'false');
+    const newElementCount = groups.reduce((s,g)=>s+g.elements.length,0);
+
+    if (shouldAppend) {
+      const appendedGroups=[];
+      groups.forEach(g=>{
+        let merged=false;
+        for(let i=0;i<STATE.groups.length;i+=1){
+          const existing=STATE.groups[i];
+          if(Math.abs(existing.sizePx-g.sizePx) < 0.001){
+            g.elements.forEach(el=>{
+              existing.elements.push(el);
+              el.setAttribute('data-typescope','');
+              el.setAttribute('data-typo-group', String(i));
+              el.setAttribute('data-typo-active', existing.active?'true':'false');
+            });
+            g.weights.forEach(w=>existing.weights.add(w));
+            g.lineHeights.forEach(v=>existing.lineHeights.add(v));
+            g.letterSpacings.forEach(v=>existing.letterSpacings.add(v));
+            g.familiesCount.forEach((count,fam)=>{
+              existing.familiesCount.set(fam,(existing.familiesCount.get(fam)||0)+count);
+            });
+            merged=true;
+            break;
+          }
+        }
+        if(!merged){
+          appendedGroups.push(g);
+        }
       });
-      g.initialActive = g.active;
-      g.initialHue = g.hue;
-    });
 
-    STATE.groups=groups;
-    STATE.groupsInitialSnapshot = groups.map(g => ({
-      sizePx: g.sizePx,
-      active: g.initialActive,
-      autoSuppressed: g.autoSuppressed,
-      anchorSizePx: g.anchorSizePx,
-      hue: g.initialHue,
-      elements: g.elements.slice(),
-      weights: new Set(g.weights),
-      lineHeights: new Set(g.lineHeights),
-      letterSpacings: new Set(g.letterSpacings),
-      familiesCount: new Map(g.familiesCount),
-    }));
+      appendedGroups.forEach(g=>{
+        const idx=STATE.groups.length;
+        g.elements.forEach(el=>{
+          el.setAttribute('data-typescope','');
+          el.setAttribute('data-typo-group', String(idx));
+          el.setAttribute('data-typo-active', g.active?'true':'false');
+        });
+        g.initialActive=g.active;
+        g.initialHue=g.hue;
+        STATE.groups.push(g);
+        STATE.groupsInitialSnapshot.push({
+          sizePx: g.sizePx,
+          active: g.initialActive,
+          autoSuppressed: g.autoSuppressed,
+          anchorSizePx: g.anchorSizePx,
+          hue: g.initialHue,
+          elements: g.elements.slice(),
+          weights: new Set(g.weights),
+          lineHeights: new Set(g.lineHeights),
+          letterSpacings: new Set(g.letterSpacings),
+          familiesCount: new Map(g.familiesCount),
+        });
+      });
 
-    STATE.totalElements=groups.reduce((s,g)=>s+g.elements.length,0);
+      STATE.totalElements += newElementCount;
+    } else {
+      groups.forEach((g,idx)=>{
+        g.elements.forEach(el=>{
+          el.setAttribute('data-typescope',''); el.setAttribute('data-typo-group', String(idx)); el.setAttribute('data-typo-active', g.active?'true':'false');
+        });
+        g.initialActive = g.active;
+        g.initialHue = g.hue;
+      });
+
+      STATE.groups=groups;
+      STATE.groupsInitialSnapshot = groups.map(g => ({
+        sizePx: g.sizePx,
+        active: g.initialActive,
+        autoSuppressed: g.autoSuppressed,
+        anchorSizePx: g.anchorSizePx,
+        hue: g.initialHue,
+        elements: g.elements.slice(),
+        weights: new Set(g.weights),
+        lineHeights: new Set(g.lineHeights),
+        letterSpacings: new Set(g.letterSpacings),
+        familiesCount: new Map(g.familiesCount),
+      }));
+
+      STATE.totalElements=newElementCount;
+    }
 
     applyStyles();
     buildBadges();
@@ -358,14 +664,14 @@
   function startElementPicker(){
     if(picking) return; picking=true;
     const tip=document.createElement('div');
-    tip.textContent='Click a container to scan only that region • Esc to cancel';
-    Object.assign(tip.style,{position:'fixed',top:'12px',left:'50%',transform:'translateX(-50%)',zIndex:'2147483647',background:'rgba(15,23,42,0.92)',color:'#fff',padding:'6px 10px',borderRadius:'8px',font:'12px Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif',border:'1px solid rgba(148,163,184,.6)'}); document.body.appendChild(tip); pickerTip=tip;
+    tip.textContent='Click a container to scan only that region • Press Esc to cancel';
+    Object.assign(tip.style,{position:'fixed',top:'12px',left:'50%',transform:'translateX(-50%)',zIndex:'2147483647',background:'rgba(0,0,0,0.72)',color:'#fff',padding:'6px 10px',borderRadius:'800px',font:'12px Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif',border:'1px solid rgba(255,255,255,.24)', backdropFilter: 'blur(20px)',WebkitBackdropFilter: 'blur(20px)' }); document.body.appendChild(tip); pickerTip=tip;
     const box=document.createElement('div'); Object.assign(box.style,{position:'fixed',border:'2px solid #22d3ee',background:'rgba(34,211,238,0.08)',zIndex:'2147483646',pointerEvents:'none'}); document.body.appendChild(box); pickerBox=box;
     function positionBox(el){const r=el.getBoundingClientRect(); box.style.left=`${r.left}px`; box.style.top=`${r.top}px`; box.style.width=`${r.width}px`; box.style.height=`${r.height}px`;}
     function onMove(e){const t=document.elementFromPoint(e.clientX,e.clientY); if(!t) return; const el=t.closest('*'); if(!el||el===document.documentElement||el===document.body||el===box) return; positionBox(el); pickedRoot=el;}
-    function onClick(e){e.preventDefault();e.stopPropagation(); cleanup(); scan(pickedRoot||document.body); chrome.runtime.sendMessage({type:'typoscope:summary', payload: summarize()});
+    function onClick(e){e.preventDefault();e.stopPropagation(); cleanup(); scan(pickedRoot||document.body); chrome.runtime.sendMessage({type:'typescope:summary', payload: summarize()});
       // Ask background to reopen the popup after scan is complete
-      chrome.runtime.sendMessage({type:'typoscope:openPopup'});
+      chrome.runtime.sendMessage({type:'typescope:openPopup'});
     }
     function onKey(e){if(e.key==='Escape') cleanup();}
     function cleanup(){picking=false;document.removeEventListener('mousemove',onMove,true);document.removeEventListener('click',onClick,true);document.removeEventListener('keydown',onKey,true); if(pickerBox)pickerBox.remove(); if(pickerTip)pickerTip.remove(); pickerBox=null; pickerTip=null;}
@@ -392,16 +698,16 @@
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if(!msg||!msg.type) return;
     switch(msg.type){
-      case 'typoscope:scanPage': {
+      case 'typescope:scanPage': {
         scan();
         sendResponse({ ok:true, summary: summarize() });
         return true;
       }
-      case 'typoscope:getSummary': {
+      case 'typescope:getSummary': {
         sendResponse({ ok:true, summary: summarize() });
         return true;
       }
-      case 'typoscope:toggleGroup': {
+      case 'typescope:toggleGroup': {
         const { idx, active } = msg;
         const g = STATE.groups[idx]; if(!g) { sendResponse({ ok:false }); return; }
         g.active = !!active;
@@ -410,7 +716,7 @@
         sendResponse({ ok:true, summary: summarize() });
         return true;
       }
-      case 'typoscope:setHue': {
+      case 'typescope:setHue': {
         const { idx, hue } = msg;
         const g = STATE.groups[idx]; if(!g) { sendResponse({ ok:false }); return; }
         g.hue = hue;
@@ -419,7 +725,7 @@
         sendResponse({ ok:true, summary: summarize() });
         return true;
       }
-      case 'typoscope:reset': {
+      case 'typescope:reset': {
         STATE.groups.forEach((g,i)=>{
           const s=STATE.groupsInitialSnapshot[i];
           g.active=s.active; g.hue=s.hue;
@@ -431,12 +737,41 @@
         sendResponse({ ok:true, summary: summarize() });
         return true;
       }
-      case 'typoscope:selectRegion': {
+      case 'typescope:selectRegion': {
         startElementPicker();
         sendResponse({ ok:true });
         return true;
       }
-      case 'typoscope:clear': {
+      case 'typescope:selectElement': {
+        startElementCollector();
+        sendResponse({ ok:true });
+        return true;
+      }
+      case 'typescope:getSelections': {
+        sendResponse({ ok:true, items: STATE.elementSelections.slice() });
+        return true;
+      }
+      case 'typescope:getElementPickerState': {
+        sendResponse({
+          ok: true,
+          picking: !!STATE.elementPicking,
+          selectionCount: STATE.elementSelections.length,
+        });
+        return true;
+      }
+      case 'typescope:clearSelections': {
+        clearElementSelections();
+        sendResponse({ ok:true });
+        return true;
+      }
+      case 'typescope:refocusPage': {
+        setTimeout(() => {
+          try { window.focus(); } catch (err) { /* ignore */ }
+        }, 0);
+        sendResponse({ ok:true });
+        return true;
+      }
+      case 'typescope:clear': {
         clearAll();
         sendResponse({ ok:true });
         return true;

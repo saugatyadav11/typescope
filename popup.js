@@ -6,6 +6,7 @@ const btnRight = document.getElementById('btnRight');
 
 let didAnimateResults = false; // animate only the first time results appear
 let initialActiveStates = []; // Track initial checkbox states
+let elementSelections = [];
 
 function sendToTab(message) {
   return new Promise((resolve) => {
@@ -20,11 +21,10 @@ function removeHomeGrids() {
   document.querySelectorAll('.home-grid').forEach(el => el.remove());
 }
 
+
 /* header modes */
 function setHeader(mode){
   if(mode==='default'){
-    // Clear overlays when going back to default
-    sendToTab({ type: 'typoscope:clear' });
     document.body.classList.remove('results');
     btnBack.style.visibility = 'hidden';
     btnBack.onclick = null;
@@ -39,7 +39,7 @@ function setHeader(mode){
     btnRight.onclick = async () => {
       const list = document.querySelector('.list');
       const keepScroll = list ? list.scrollTop : 0;
-      const res = await sendToTab({ type:'typoscope:reset' });
+      const res = await sendToTab({ type:'typescope:reset' });
       if (res?.ok) renderResults(res.summary, { preserveScroll: true, scrollTop: keepScroll, animate: false });
     };
     document.addEventListener('keydown', onPopupEsc, true); // Add Esc handler
@@ -51,7 +51,7 @@ function onPopupEsc(e) {
   if (e.key === 'Escape') {
     // Only act if in results mode
     if (document.body.classList.contains('results')) {
-      sendToTab({ type: 'typoscope:clear' });
+      sendToTab({ type: 'typescope:clear' });
       renderActions();
       e.stopPropagation();
       e.preventDefault();
@@ -60,11 +60,13 @@ function onPopupEsc(e) {
 }
 
 /* default view (homepage) */
-function renderActions(){
+async function renderActions(opts = {}){
+  const { clear = true } = opts;
   initialActiveStates = [];
   didAnimateResults = false; // <-- Reset animation state on home
   setHeader('default');
   removeHomeGrids();
+  if (clear) await sendToTab({ type: 'typescope:clear' });
   mount.innerHTML = `
     <div class="home-layout">
       <div class="home-main">
@@ -85,6 +87,19 @@ function renderActions(){
 </svg>
               </span>
               <span class="label">Scan section</span>
+            </button>
+            <button id="scanElement" class="btn btn-scan-section">
+              <span class="icon">
+<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M9.58335 4.16699V1.66699H8.75002V4.16699H9.58335Z" fill="#3D3D3D" style="fill:#3D3D3D;fill:color(display-p3 0.2392 0.2392 0.2392);fill-opacity:1;"/>
+<path d="M7.56512 7.56543L18.9372 12.0154L14.4873 14.4876L12.0151 18.9375L7.56512 7.56543Z" fill="#3D3D3D" style="fill:#3D3D3D;fill:color(display-p3 0.2392 0.2392 0.2392);fill-opacity:1;"/>
+<path d="M14.8862 4.03603L12.9963 5.92584L12.4071 5.33658L14.2969 3.44678L14.8862 4.03603Z" fill="#3D3D3D" style="fill:#3D3D3D;fill:color(display-p3 0.2392 0.2392 0.2392);fill-opacity:1;"/>
+<path d="M4.03638 14.8866L5.92619 12.9968L5.33693 12.4076L3.44713 14.2974L4.03638 14.8866Z" fill="#3D3D3D" style="fill:#3D3D3D;fill:color(display-p3 0.2392 0.2392 0.2392);fill-opacity:1;"/>
+<path d="M4.16669 9.58366H1.66669V8.75033H4.16669V9.58366Z" fill="#3D3D3D" style="fill:#3D3D3D;fill:color(display-p3 0.2392 0.2392 0.2392);fill-opacity:1;"/>
+<path d="M3.44707 4.03669L5.33687 5.9265L5.92613 5.33724L4.03632 3.44743L3.44707 4.03669Z" fill="#3D3D3D" style="fill:#3D3D3D;fill:color(display-p3 0.2392 0.2392 0.2392);fill-opacity:1;"/>
+</svg>
+              </span>
+              <span class="label">Scan element</span>
             </button>
           </div>
           <div class="home-credit">Designed by <a href="https://x.com/saugattttt" target="_blank" rel="noopener noreferrer">Saugat</a></div>
@@ -162,14 +177,21 @@ function renderActions(){
   });
 
   document.getElementById('scanPage').addEventListener('click', async () => {
-    const res = await sendToTab({ type: 'typoscope:scanPage' });
+    const res = await sendToTab({ type: 'typescope:scanPage' });
     if (res?.ok) renderResults(res.summary, { animate: true });
   });
   document.getElementById('scanRegion').addEventListener('click', async () => {
-    await sendToTab({ type: 'typoscope:selectRegion' });
+    await sendToTab({ type: 'typescope:selectRegion' });
     window.close(); // Close the popup so user can interact with the page
     // summary will be pushed; see listener below
   });
+  document.getElementById('scanElement').addEventListener('click', async () => {
+    await sendToTab({ type:'typescope:selectElement' });
+    window.close();
+  });
+
+  renderHomeSelectionsList();
+  loadElementSelections();
 }
 
 /* Helper: check if any group checkbox state has changed from initial */
@@ -179,8 +201,9 @@ function hasCheckboxStateChanged(summary) {
 }
 
 /* results view */
-function renderResults(summary, opts = {}) {
-  const { preserveScroll = false, scrollTop = 0 } = opts;
+async function renderResults(summary, opts = {}) {
+  const { preserveScroll = false, scrollTop = 0, requestRefocus = false } = opts;
+  const animate = opts.animate ?? true;
 
   setHeader('results');
   removeHomeGrids();
@@ -220,8 +243,8 @@ function renderResults(summary, opts = {}) {
     const bg = tw[g.hue]?.[600] || '#000';
     const fg = tw[g.hue]?.[50] || '#fff';
     const row = document.createElement('div');
-    row.className = 'item' + (!didAnimateResults && (opts.animate ?? true) ? ' ts-enter' : '');
-    if (!didAnimateResults && (opts.animate ?? true)) row.style.animationDelay = `${i * 40}ms`;
+    row.className = 'item' + (!didAnimateResults && animate ? ' ts-enter' : '');
+    if (!didAnimateResults && animate) row.style.animationDelay = `${i * 40}ms`;
 
     row.innerHTML = `
       <div class="sizebox" data-idx="${g.idx}" title="Pick color">
@@ -231,7 +254,7 @@ function renderResults(summary, opts = {}) {
         <div class="meta-row meta-row-top">
           <div class="meta" title="Primary font family">
             <span class="meta-icon">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M0.583252 10.7272H1.79617L2.48264 8.71422H5.35236L6.03366 10.7272H7.24658L4.54202 3.2793H3.29297L0.583252 10.7272ZM3.90718 4.51286H3.92782L5.03752 7.78518H2.79232L3.90718 4.51286Z" fill="#494949" style="fill:#494949;fill:color(display-p3 0.2869 0.2869 0.2869);fill-opacity:1;"/><path d="M10.0306 10.8252C10.7481 10.8252 11.3777 10.4536 11.6926 9.87037H11.7132V10.7272H12.8333V6.98516C12.8333 5.89611 11.9919 5.19417 10.6655 5.19417C9.32868 5.19417 8.51835 5.9116 8.44093 6.84581L8.43576 6.90258H9.48868L9.49901 6.85613C9.59191 6.42257 9.98934 6.11805 10.6345 6.11805C11.3261 6.11805 11.7132 6.47935 11.7132 7.07807V7.48582L10.2371 7.57356C8.9519 7.65098 8.21899 8.22905 8.21899 9.17358V9.18391C8.21899 10.1594 8.94674 10.8252 10.0306 10.8252ZM9.34417 9.1581V9.14778C9.34417 8.68842 9.71578 8.39422 10.3868 8.35293L11.7132 8.27034V8.69358C11.7132 9.40069 11.1197 9.93231 10.3351 9.93231C9.73643 9.93231 9.34417 9.63295 9.34417 9.1581Z" fill="#494949" style="fill:#494949;fill:color(display-p3 0.2869 0.2869 0.2869);fill-opacity:1;"/></svg>
+              <svg width="17" height="17" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M0.583252 10.7272H1.79617L2.48264 8.71422H5.35236L6.03366 10.7272H7.24658L4.54202 3.2793H3.29297L0.583252 10.7272ZM3.90718 4.51286H3.92782L5.03752 7.78518H2.79232L3.90718 4.51286Z" fill="#494949" style="fill:#494949;fill:color(display-p3 0.2869 0.2869 0.2869);fill-opacity:1;"/><path d="M10.0306 10.8252C10.7481 10.8252 11.3777 10.4536 11.6926 9.87037H11.7132V10.7272H12.8333V6.98516C12.8333 5.89611 11.9919 5.19417 10.6655 5.19417C9.32868 5.19417 8.51835 5.9116 8.44093 6.84581L8.43576 6.90258H9.48868L9.49901 6.85613C9.59191 6.42257 9.98934 6.11805 10.6345 6.11805C11.3261 6.11805 11.7132 6.47935 11.7132 7.07807V7.48582L10.2371 7.57356C8.9519 7.65098 8.21899 8.22905 8.21899 9.17358V9.18391C8.21899 10.1594 8.94674 10.8252 10.0306 10.8252ZM9.34417 9.1581V9.14778C9.34417 8.68842 9.71578 8.39422 10.3868 8.35293L11.7132 8.27034V8.69358C11.7132 9.40069 11.1197 9.93231 10.3351 9.93231C9.73643 9.93231 9.34417 9.63295 9.34417 9.1581Z" fill="#494949" style="fill:#494949;fill:color(display-p3 0.2869 0.2869 0.2869);fill-opacity:1;"/></svg>
             </span>
             <div class="meta-text">
               <span class="meta-label">${g.familyLabel || '—'}</span>
@@ -239,7 +262,9 @@ function renderResults(summary, opts = {}) {
           </div>
           <div class="meta" title="Font weight">
             <span class="meta-icon">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.04175 3.20866V2.04199H7.00008M11.9584 3.20866V2.04199H7.00008M7.00008 2.04199V11.9587M7.00008 11.9587H5.54175M7.00008 11.9587H8.45841" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-linecap="square"/></svg>
+            <svg width="13" height="14" viewBox="0 0 13 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M1.89575 3.47884V2.39551H6.49992M11.1041 3.47884V2.39551H6.49992M6.49992 2.39551V11.6038M6.49992 11.6038H5.14575M6.49992 11.6038H7.85409" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-width="1.2" stroke-linecap="square"/>
+</svg>
             </span>
             <div class="meta-text">
               <span class="meta-label">${g.weightLabel}</span>
@@ -249,7 +274,13 @@ function renderResults(summary, opts = {}) {
         <div class="meta-row">
           <div class="meta" title="Line height">
             <span class="meta-icon">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12.5417 11.375L1.45841 11.375" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-linecap="square"/><path d="M12.5417 2.625L1.45841 2.625" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-linecap="square"/><path d="M8.45825 8.16667L6.99992 9.625L5.54159 8.16667" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-linecap="square"/><path d="M8.45825 5.83301L6.99992 4.37467L5.54159 5.83301" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-linecap="square"/></svg>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M12.5417 11.375L1.45841 11.375" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-width="1.2" stroke-linecap="square"/>
+<path d="M12.5417 2.625L1.45841 2.625" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-width="1.2" stroke-linecap="square"/>
+<path d="M8.45825 8.16667L6.99992 9.625L5.54159 8.16667" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-width="1.2" stroke-linecap="square"/>
+<path d="M8.45825 5.83301L6.99992 4.37467L5.54159 5.83301" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-width="1.2" stroke-linecap="square"/>
+</svg>
+
             </span>
             <div class="meta-text">
               <span class="meta-label">${g.lineLabel}</span>
@@ -257,7 +288,13 @@ function renderResults(summary, opts = {}) {
           </div>
           <div class="meta" title="Letter spacing">
             <span class="meta-icon">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.625 12.542L2.625 1.45866" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-linecap="square"/><path d="M11.375 12.542V1.45866" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-linecap="square"/><path d="M5.83333 8.45801L4.375 6.99967L5.83333 5.54134" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-linecap="square"/><path d="M8.16675 8.45801L9.62508 6.99967L8.16675 5.54134" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-linecap="square"/></svg>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M2.77075 12.3955L2.77075 1.60384" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-width="1.2" stroke-linecap="square"/>
+<path d="M11.2292 12.3955V1.60384" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-width="1.2" stroke-linecap="square"/>
+<path d="M5.83325 8.3125L4.52075 7L5.83325 5.6875" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-width="1.2" stroke-linecap="square"/>
+<path d="M8.3125 8.3125L9.625 7L8.3125 5.6875" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-width="1.2" stroke-linecap="square"/>
+</svg>
+
             </span>
             <div class="meta-text">
               <span class="meta-label">${g.lsLabel}</span>
@@ -266,7 +303,7 @@ function renderResults(summary, opts = {}) {
         </div>
       </div>
       <div class="chk${g.active ? ' on' : ''}" data-idx="${g.idx}" role="checkbox" aria-checked="${g.active ? 'true':'false'}" title="Toggle">
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg"><g clip-path="url(#k)"><path d="M1.25 6.25008L3.87255 8.33341L8.75 1.66675" stroke="white" stroke-width="2" stroke-linecap="square"/></g><defs><clipPath id="k"><rect width="10" height="10" fill="white"/></clipPath></defs></svg>
+        <svg width="8" height="8" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg"><g clip-path="url(#k)"><path d="M1.25 6.25008L3.87255 8.33341L8.75 1.66675" stroke="white" stroke-width="2" stroke-linecap="square"/></g><defs><clipPath id="k"><rect width="10" height="10" fill="white"/></clipPath></defs></svg>
       </div>
     `;
 
@@ -293,8 +330,12 @@ function renderResults(summary, opts = {}) {
   }
 
   // mark that we already ran the entry animation once
-  if (!didAnimateResults && (opts.animate ?? true)) {
+  if (!didAnimateResults && animate) {
     didAnimateResults = true;
+  }
+
+  if (requestRefocus) {
+    await sendToTab({ type: 'typescope:refocusPage' });
   }
 }
 
@@ -302,7 +343,7 @@ function renderResults(summary, opts = {}) {
 async function toggleGroup(idx, active){
   const list = document.querySelector('.list');
   const keepScroll = list ? list.scrollTop : 0;
-  const res = await sendToTab({ type:'typoscope:toggleGroup', idx, active });
+  const res = await sendToTab({ type:'typescope:toggleGroup', idx, active });
   if (res?.ok) {
     renderResults(res.summary, { preserveScroll: true, scrollTop: keepScroll, animate: false });
   }
@@ -322,7 +363,7 @@ function openHuePicker(anchorEl, groupIdx, summary){
       ev.stopPropagation();
       const list = document.querySelector('.list');
       const keepScroll = list ? list.scrollTop : 0;
-      const res = await sendToTab({ type:'typoscope:setHue', idx: groupIdx, hue: h });
+      const res = await sendToTab({ type:'typescope:setHue', idx: groupIdx, hue: h });
       picker.style.display='none';
       if (res?.ok) renderResults(res.summary, { preserveScroll: true, scrollTop: keepScroll, animate: false });
     });
@@ -340,19 +381,41 @@ function openHuePicker(anchorEl, groupIdx, summary){
 
 /* accept summaries pushed after section-pick (animate first time) */
 chrome.runtime.onMessage.addListener((msg) => {
-  if (msg?.type === 'typoscope:summary') {
+  if (msg?.type === 'typescope:summary') {
     didAnimateResults = false;
     renderResults(msg.payload, { animate: true });
+  } else if (msg?.type === 'typescope:elementSelectionUpdate') {
+    elementSelections = msg.payload?.items || [];
+    renderHomeSelectionsList();
   }
 });
 
 /* boot: show results if already scanned else homepage */
 (async () => {
-  const res = await sendToTab({ type:'typoscope:getSummary' });
-  if (res?.ok && res.summary?.groups?.length) {
-    didAnimateResults = false; // <-- Always animate on boot if results
-    renderResults(res.summary, { animate: true });
-  } else {
-    renderActions();
+  let summaryRes = null;
+  let pickerState = null;
+
+  try {
+    summaryRes = await sendToTab({ type: 'typescope:getSummary' });
+  } catch (err) {
+    summaryRes = null;
   }
+
+  try {
+    pickerState = await sendToTab({ type: 'typescope:getElementPickerState' });
+  } catch (err) {
+    pickerState = null;
+  }
+
+  if (summaryRes?.ok && summaryRes.summary?.groups?.length) {
+    didAnimateResults = false; // <-- Always animate on boot if results
+    renderResults(summaryRes.summary, { animate: true });
+    return;
+  }
+
+  const hasSelections = !!pickerState?.ok && (pickerState.selectionCount > 0);
+  const isPicking = !!pickerState?.ok && pickerState.picking;
+  const shouldClear = !(hasSelections || isPicking);
+
+  renderActions({ clear: shouldClear });
 })();

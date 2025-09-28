@@ -97,18 +97,7 @@
       align-items:center;
     }
     .home-actions .btn{
-      width:220px;
-    }
-    .home-brand{
-      display:flex;
-      align-items:center;
-      justify-content:center;
-    }
-    .home-brand-text{
-      font:700 24px/28px Inter;
-      letter-spacing:-0.3px;
-      color:#000;
-      text-align:center;
+      width:232px;
     }
     .home-credit{
       font:500 13px/18px Inter;
@@ -138,7 +127,7 @@
       width:80px;
       display:grid;
       grid-template-columns:repeat(2,40px);
-      grid-auto-rows:40px;
+      grid-auto-rows:40px;    
       border-left:1px solid rgba(0, 0, 0, 0.06);
       pointer-events:none;
       z-index:0;
@@ -156,21 +145,30 @@
       justify-content:center;
       pointer-events:auto;
     }
-    .grid-badge{
-      width:28px; height:28px;
-      border-radius:999px;
-      display:flex; align-items:center; justify-content:center;
-      font:600 12px/12px Inter;
-      color:#fff;
-      opacity:0;
-      transform:scale(0.6);
-    }
+.grid-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 12px/12px Inter;
+  color: #fff;
+  opacity: 0;
+  transform: scale(0.6);
+  /* Remove border-bottom */
+  /* Add inner border using box-shadow */
+  box-shadow: inset 0 -1px 0 0 rgba(0, 0, 0, 0.1);
+  /* For display-p3 color (if supported) */
+  /* box-shadow: inset 0 -1px 0 0 color(display-p3 0.000 0.000 0.000 / 0.1); */
+}
     .grid-badge.on{
       animation:gridPop 280ms cubic-bezier(0.22,1,0.36,1) forwards;
     }
     .grid-badge.fade{
-      animation:gridFade 240ms ease-out forwards;
+      animation:gridFade 500ms ease-out forwards;
     }
+
     @keyframes gridPop{
       0%{opacity:0;transform:scale(0.6);}
       45%{opacity:1;transform:scale(1.1);}
@@ -178,8 +176,10 @@
       100%{opacity:1;transform:scale(1);}
     }
     @keyframes gridFade{
-      from{opacity:1;transform:scale(1);}
-      to{opacity:0;transform:scale(0.85);}
+      0%{opacity:1;transform:scale(1);}
+      45%{opacity:0.6;transform:scale(1);}
+      70%{opacity:0.2;transform:scale(0.2);}
+      100%{opacity:0;transform:scale(0);}
     }
 
     /* Buttons */
@@ -190,6 +190,8 @@
     .btn-scan-section{ padding:0 20px; background:#EBEBEB; color:#3D3D3D; width:100%; }
     .btn-scan-section .label{ color:#3D3D3D; }
     .btn-scan-section:hover{ background:#E5E5E5;}
+
+
 
     /* Results list container: NO fill, NO shadow */
     .list{
@@ -315,7 +317,7 @@
       color: #fff;
       background: rgba(0, 0, 0, 0.75);
       border-radius: 8px;
-      font: 400 14px/20px Inter;
+      font: 400 13px/20px Inter;
       line-height: 1.4;
       white-space: nowrap;
       pointer-events: none;
