@@ -16,6 +16,10 @@ function sendToTab(message) {
   });
 }
 
+function removeHomeGrids() {
+  document.querySelectorAll('.home-grid').forEach(el => el.remove());
+}
+
 /* header modes */
 function setHeader(mode){
   if(mode==='default'){
@@ -60,35 +64,102 @@ function renderActions(){
   initialActiveStates = [];
   didAnimateResults = false; // <-- Reset animation state on home
   setHeader('default');
+  removeHomeGrids();
   mount.innerHTML = `
-    <div class="row-actions">
-      <div class="actions">
-        <button id="scanPage" class="btn btn-scan-page">
-          <span class="icon">
-<svg width="17" height="16" viewBox="0 0 17 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M4.66659 3.1665H2.33325V5.49984M12.3333 3.1665H14.6666V5.49984M14.6666 10.4998V12.8332H12.3333M4.66659 12.8332H2.33325V10.4998" stroke="white" style="stroke:white;stroke-opacity:1;" stroke-width="1.5" stroke-linecap="square"/>
-<path d="M5.66675 6.5H11.3334" stroke="white" style="stroke:white;stroke-opacity:1;" stroke-width="1.5" stroke-linecap="square"/>
-<path d="M5.66675 9.5H10.0001" stroke="white" style="stroke:white;stroke-opacity:1;" stroke-width="1.5" stroke-linecap="square"/>
+    <div class="home-layout">
+      <div class="home-main">
+        <div class="home-main-content">
+          <div class="home-actions">
+            <button id="scanPage" class="btn btn-scan-page">
+              <span class="icon">
+<svg width="20" height="20" viewBox="0 0 21 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path fill-rule="evenodd" clip-rule="evenodd" d="M3.83325 18.3337V1.66699H17.1666V13.3932C17.1666 14.137 16.9227 14.8602 16.4724 15.4544C15.0978 17.2678 12.9418 18.3337 10.6539 18.3337H3.83325ZM16.3333 13.079C16.3333 13.5198 16.182 13.8208 15.9566 14.0339C15.7211 14.2566 15.3752 14.4096 14.9558 14.4828C14.1033 14.6317 13.1022 14.4253 12.5343 14.0507L12.2521 13.8645L11.0596 15.0444C9.47088 16.6164 7.31516 17.5003 5.06645 17.5003H4.66659V2.50033H16.3333V13.079Z" fill="white" style="fill:white;fill-opacity:1;"/>
 </svg>
-
-          </span>
-          <span class="label" style="color:#fff">Scan page</span>
-        </button>
-        <button id="scanRegion" class="btn btn-scan-section">
-          <span class="icon">
-<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M13.5 2.5H14.25V1.75H13.5V2.5ZM13.5 13.5V14.25H14.25V13.5H13.5ZM2.5 13.5H1.75V14.25H2.5V13.5ZM2.5 2.5V1.75H1.75V2.5H2.5ZM13.5 2.5H12.75V13.5H13.5H14.25V2.5H13.5ZM13.5 13.5V12.75H2.5V13.5V14.25H13.5V13.5ZM2.5 13.5H3.25V2.5H2.5H1.75V13.5H2.5ZM2.5 2.5V3.25H13.5V2.5V1.75H2.5V2.5Z" fill="#3D3D3D" style="fill:#3D3D3D;fill:color(display-p3 0.2392 0.2392 0.2392);fill-opacity:1;"/>
-<path d="M8 8.75H7.25V10.25H8V9.5V8.75ZM13.5 10.25H14.25V8.75H13.5V9.5V10.25ZM8 9.5V10.25H13.5V9.5V8.75H8V9.5Z" fill="#3D3D3D" style="fill:#3D3D3D;fill:color(display-p3 0.2392 0.2392 0.2392);fill-opacity:1;"/>
-<path d="M8 7.25H8.75V5.75H8V6.5V7.25ZM2.5 5.75H1.75V7.25H2.5V6.5V5.75ZM8 6.5V5.75H2.5V6.5V7.25H8V6.5Z" fill="#3D3D3D" style="fill:#3D3D3D;fill:color(display-p3 0.2392 0.2392 0.2392);fill-opacity:1;"/>
-<path d="M7.25 13.5V14.25H8.75V13.5H8H7.25ZM8.75 2.5V1.75H7.25V2.5H8H8.75ZM8 2.5H7.25V13.5H8H8.75V2.5H8Z" fill="#3D3D3D" style="fill:#3D3D3D;fill:color(display-p3 0.2392 0.2392 0.2392);fill-opacity:1;"/>
+              </span>
+              <span class="label" style="color:#fff">Scan page</span>
+            </button>
+            <button id="scanRegion" class="btn btn-scan-section">
+              <span class="icon">
+<svg width="20" height="20" viewBox="0 0 21 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M3.41675 5.00033V2.91699H5.50008M15.5001 2.91699H17.5834V5.00033M17.5834 15.0003V17.0837H15.5001M5.50008 17.0837H3.41675V15.0003M3.41675 11.667V8.33366M8.83341 2.91699H12.1667M17.5834 8.33366V11.667M12.1667 17.0837H8.83341" stroke="#3D3D3D" style="stroke:#3D3D3D;stroke:color(display-p3 0.2392 0.2392 0.2392);stroke-opacity:1;" stroke-width="1.2" stroke-linecap="square"/>
 </svg>
-
-          </span>
-          <span class="label">Scan section</span>
-        </button>
+              </span>
+              <span class="label">Scan section</span>
+            </button>
+          </div>
+          <div class="home-credit">Designed by <a href="https://x.com/saugattttt" target="_blank" rel="noopener noreferrer">Saugat</a></div>
+        </div>
       </div>
     </div>
   `;
+
+  const colorPalette = [
+    '#ef4444','#f97316','#f59e0b','#84cc16','#22c55e','#14b8a6','#0ea5e9','#6366f1','#8b5cf6','#ec4899','#f43f5e'
+  ];
+  const sizeChoices = [10,12,16,20,24,32,40,48];
+  const card = document.querySelector('.ts-card');
+  const main = document.querySelector('.home-main');
+  const grids = (() => {
+    if (!card) return [];
+    const left = document.createElement('div');
+    left.className = 'home-grid home-grid-left';
+    const right = document.createElement('div');
+    right.className = 'home-grid home-grid-right';
+    card.appendChild(left);
+    card.appendChild(right);
+    return [left, right];
+  })();
+
+  const cardRect = card?.getBoundingClientRect();
+  grids.forEach(grid => {
+    if (!grid) return;
+    if (grid.classList.contains('home-grid-left')) grid.style.left = '0';
+    if (grid.classList.contains('home-grid-right')) grid.style.right = '0';
+  });
+
+  const totalHeight = cardRect ? cardRect.height : 0;
+  const rows = Math.max(10, Math.ceil((totalHeight + 80) / 40));
+
+  grids.forEach(grid => {
+    if (!grid) return;
+    grid.innerHTML = '';
+    for (let i = 0; i < rows * 2; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'home-grid-cell';
+      cell.addEventListener('mouseenter', () => {
+        if (cell._badgeTimeout) {
+          clearTimeout(cell._badgeTimeout);
+          cell._badgeTimeout = null;
+        }
+        const existing = cell.querySelector('.grid-badge');
+        if (existing) existing.remove();
+        const badge = document.createElement('span');
+        badge.className = 'grid-badge';
+        const color = colorPalette[Math.floor(Math.random() * colorPalette.length)];
+        const value = sizeChoices[Math.floor(Math.random() * sizeChoices.length)];
+        badge.style.background = color;
+        badge.textContent = value;
+        cell.appendChild(badge);
+        cell._badgeTimeout = window.setTimeout(() => {
+          if (badge.isConnected) badge.classList.add('on');
+          cell._badgeTimeout = null;
+        }, 70);
+      });
+      cell.addEventListener('mouseleave', () => {
+        if (cell._badgeTimeout) {
+          clearTimeout(cell._badgeTimeout);
+          cell._badgeTimeout = null;
+        }
+        const badge = cell.querySelector('.grid-badge');
+        if (badge) {
+          badge.classList.remove('on');
+          badge.classList.add('fade');
+          setTimeout(() => { if (badge.isConnected) badge.remove(); }, 260);
+        }
+      });
+      grid.appendChild(cell);
+    }
+  });
 
   document.getElementById('scanPage').addEventListener('click', async () => {
     const res = await sendToTab({ type: 'typoscope:scanPage' });
@@ -112,6 +183,7 @@ function renderResults(summary, opts = {}) {
   const { preserveScroll = false, scrollTop = 0 } = opts;
 
   setHeader('results');
+  removeHomeGrids();
 
   // Only update initialActiveStates if it's empty or group count changed
   if (!initialActiveStates.length || initialActiveStates.length !== summary.groups.length) {
@@ -152,38 +224,44 @@ function renderResults(summary, opts = {}) {
     if (!didAnimateResults && (opts.animate ?? true)) row.style.animationDelay = `${i * 40}ms`;
 
     row.innerHTML = `
-      <div class="sizebox" style="background:${bg};color:${fg}" data-idx="${g.idx}" title="Pick color">
-        <span class="num" style="color:${fg}">${g.sizePx}</span><span class="unit" style="color:${fg}">px</span>
+      <div class="sizebox" data-idx="${g.idx}" title="Pick color">
+        <div class="sizebox-swatch" style="background:${bg};color:${fg}">${g.sizePx}</div>
       </div>
-      <div class="right">
-        <div class="pills">
-          <div class="pill">
-            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.04163 3.20841V2.04175H6.99996M11.9583 3.20841V2.04175H6.99996M6.99996 2.04175V11.9584M6.99996 11.9584H5.54163M6.99996 11.9584H8.45829" stroke="#3D3D3D" stroke-linecap="square"/></svg>
-            <span class="label">${g.weightLabel}</span>
+      <div class="item-body">
+        <div class="meta-row meta-row-top">
+          <div class="meta" title="Primary font family">
+            <span class="meta-icon">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M0.583252 10.7272H1.79617L2.48264 8.71422H5.35236L6.03366 10.7272H7.24658L4.54202 3.2793H3.29297L0.583252 10.7272ZM3.90718 4.51286H3.92782L5.03752 7.78518H2.79232L3.90718 4.51286Z" fill="#494949" style="fill:#494949;fill:color(display-p3 0.2869 0.2869 0.2869);fill-opacity:1;"/><path d="M10.0306 10.8252C10.7481 10.8252 11.3777 10.4536 11.6926 9.87037H11.7132V10.7272H12.8333V6.98516C12.8333 5.89611 11.9919 5.19417 10.6655 5.19417C9.32868 5.19417 8.51835 5.9116 8.44093 6.84581L8.43576 6.90258H9.48868L9.49901 6.85613C9.59191 6.42257 9.98934 6.11805 10.6345 6.11805C11.3261 6.11805 11.7132 6.47935 11.7132 7.07807V7.48582L10.2371 7.57356C8.9519 7.65098 8.21899 8.22905 8.21899 9.17358V9.18391C8.21899 10.1594 8.94674 10.8252 10.0306 10.8252ZM9.34417 9.1581V9.14778C9.34417 8.68842 9.71578 8.39422 10.3868 8.35293L11.7132 8.27034V8.69358C11.7132 9.40069 11.1197 9.93231 10.3351 9.93231C9.73643 9.93231 9.34417 9.63295 9.34417 9.1581Z" fill="#494949" style="fill:#494949;fill:color(display-p3 0.2869 0.2869 0.2869);fill-opacity:1;"/></svg>
+            </span>
+            <div class="meta-text">
+              <span class="meta-label">${g.familyLabel || '—'}</span>
+            </div>
           </div>
-          <div class="pill">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12.5416 11.375L1.45829 11.375" stroke="#3D3D3D" stroke-linecap="square"/>
-              <path d="M12.5416 2.625L1.45829 2.625" stroke="#3D3D3D" stroke-linecap="square"/>
-              <path d="M8.45837 8.16667L7.00004 9.625L5.54171 8.16667" stroke="#3D3D3D" stroke-linecap="square"/>
-              <path d="M8.45837 5.83325L7.00004 4.37492L5.54171 5.83325" stroke="#3D3D3D" stroke-linecap="square"/>
-            </svg>
-            <span class="label">${g.lineLabel}</span>
+          <div class="meta" title="Font weight">
+            <span class="meta-icon">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.04175 3.20866V2.04199H7.00008M11.9584 3.20866V2.04199H7.00008M7.00008 2.04199V11.9587M7.00008 11.9587H5.54175M7.00008 11.9587H8.45841" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-linecap="square"/></svg>
+            </span>
+            <div class="meta-text">
+              <span class="meta-label">${g.weightLabel}</span>
+            </div>
           </div>
         </div>
-        <div class="pills">
-          <div class="pill" title="Letter spacing">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" style="transform:rotate(90deg)">
-              <path d="M12.5416 11.375L1.45829 11.375" stroke="#3D3D3D" stroke-linecap="square"/>
-              <path d="M12.5416 2.625L1.45829 2.625" stroke="#3D3D3D" stroke-linecap="square"/>
-              <path d="M8.45837 8.16667L7.00004 9.625L5.54171 8.16667" stroke="#3D3D3D" stroke-linecap="square"/>
-              <path d="M8.45837 5.83325L7.00004 4.37492L5.54171 5.83325" stroke="#3D3D3D" stroke-linecap="square"/>
-            </svg>
-            <span class="label">${g.lsLabel}</span>
+        <div class="meta-row">
+          <div class="meta" title="Line height">
+            <span class="meta-icon">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12.5417 11.375L1.45841 11.375" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-linecap="square"/><path d="M12.5417 2.625L1.45841 2.625" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-linecap="square"/><path d="M8.45825 8.16667L6.99992 9.625L5.54159 8.16667" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-linecap="square"/><path d="M8.45825 5.83301L6.99992 4.37467L5.54159 5.83301" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-linecap="square"/></svg>
+            </span>
+            <div class="meta-text">
+              <span class="meta-label">${g.lineLabel}</span>
+            </div>
           </div>
-          <div class="pill" title="${g.count} elements">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><g clip-path="url(#c)"><path d="M1.458 7.0001C1.458 10.0607 3.93908 12.5418 7.00066 12.5418C10.0606 12.5418 12.5417 10.0607 12.5417 7.0001C12.5417 4.58722 10.9996 2.53452 8.84788 1.77377M1.458 7.0001C1.458 3.93952 3.93908 1.45843 7.00066 1.45843C7.64836 1.45843 8.27011 1.56955 8.84788 1.77377M1.458 7.0001H7.00066L8.84788 1.77377" stroke="#3D3D3D"/></g><defs><clipPath id="c"><rect width="14" height="14" transform="matrix(0 -1 1 0 0 14)" fill="white"/></clipPath></defs></svg>
-            <span class="label">${((g.count/summary.totalElements)*100).toFixed(0)}%</span>
+          <div class="meta" title="Letter spacing">
+            <span class="meta-icon">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.625 12.542L2.625 1.45866" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-linecap="square"/><path d="M11.375 12.542V1.45866" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-linecap="square"/><path d="M5.83333 8.45801L4.375 6.99967L5.83333 5.54134" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-linecap="square"/><path d="M8.16675 8.45801L9.62508 6.99967L8.16675 5.54134" stroke="#494949" style="stroke:#494949;stroke:color(display-p3 0.2869 0.2869 0.2869);stroke-opacity:1;" stroke-linecap="square"/></svg>
+            </span>
+            <div class="meta-text">
+              <span class="meta-label">${g.lsLabel}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -192,8 +270,6 @@ function renderResults(summary, opts = {}) {
       </div>
     `;
 
-    // interactions
-    // Remove animation logic, just toggle state directly
     const chk = row.querySelector('.chk');
     chk.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -204,7 +280,8 @@ function renderResults(summary, opts = {}) {
       toggleGroup(g.idx, !g.active);
     });
     row.querySelector('.sizebox').addEventListener('click', (e) => {
-      e.stopPropagation(); openHuePicker(e.currentTarget, g.idx, summary);
+      e.stopPropagation();
+      openHuePicker(e.currentTarget, g.idx, summary);
     });
 
     list.appendChild(row);

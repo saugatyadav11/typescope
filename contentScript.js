@@ -64,7 +64,20 @@
     const u=parseFloat(lh); return isNaN(u)?fs*1.2:fs*u;}
   function numberRange(vals){const arr=[...vals]; if(!arr.length) return null; const min=Math.min(...arr),max=Math.max(...arr),single=Math.abs(min-max)<0.01; return{min,max,single};}
   function weightRangeLabel(vals){const r=numberRange(vals); if(!r) return ''; const a=Math.round(r.min),b=Math.round(r.max); return r.single?`${weightName(a)}`:`${weightName(a)}, ${weightName(b)}`;}
-  function pxRangeLabel(vals){const r=numberRange(vals); if(!r) return ''; return r.single?fmtPx(r.min):`${Math.round(r.min)} to ${Math.round(r.max)}px`; }
+  function pxRangeLabel(vals){
+    const r = numberRange(vals);
+    if (!r) return '';
+    const min = fmtPx(r.min);
+    if (r.single) return min;
+    const max = fmtPx(r.max);
+    return `${min} to ${max}`;
+  }
+  function topFamilyLabel(familiesMap){
+    if (!familiesMap || familiesMap.size === 0) return '';
+    const entries = [...familiesMap.entries()].sort((a,b)=>b[1]-a[1]);
+    const top = entries.slice(0,2).map(([name])=>name).filter(Boolean);
+    return top.join(', ');
+  }
 
   function getAllTextElements(limit=8000, root=document.body){
     const walker=document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {acceptNode(n){
@@ -334,6 +347,7 @@
         weightLabel: weightRangeLabel(g.weights) || '—',
         lineLabel:  pxRangeLabel(g.lineHeights) || '—',
         lsLabel:    pxRangeLabel(g.letterSpacings) || '—',
+        familyLabel: topFamilyLabel(g.familiesCount) || '—',
         autoSuppressed: !!g.autoSuppressed,
       })),
     };
