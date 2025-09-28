@@ -47,7 +47,9 @@
       display:grid; grid-template-columns:32px 1fr 32px; align-items:center;
       height:48px; padding:0px 12px;
       position:relative; z-index:1;
+      pointer-events:none;
     }
+    .row-header > *{ pointer-events:auto; }
     body:not(.results) .row-header{ padding:12px 16px 0 16px; }
     .brand{ line-height:0; display:flex; justify-content:center; }
     .brand svg{ display:block; }
@@ -100,26 +102,23 @@
       width:232px;
     }
     .home-credit{
-      font:500 13px/18px Inter;
-      color:#808080;
-      color:color(display-p3 0.502 0.502 0.502);
       display:flex;
       align-items:center;
       justify-content:center;
       gap:4px;
-      padding:8px 12px;
-    }
-    .home-credit a{
+      padding:12px 12px;
+      font:500 13px/18px Inter;
       color:#808080;
       color:color(display-p3 0.502 0.502 0.502);
       text-decoration:none;
       transition:color .18s ease;
     }
-    .home-credit a:hover{
+    .home-credit .home-credit-name{ transition:text-decoration .18s ease, color .18s ease; }
+    .home-credit:hover{
       color:#3D3D3D;
       color:color(display-p3 0.2392 0.2392 0.2392);
-      text-decoration:underline;
     }
+    .home-credit:hover .home-credit-name{ text-decoration:underline; }
     .home-grid{
       position:absolute;
       top:0;

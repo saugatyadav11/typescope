@@ -6,13 +6,34 @@ const btnRight = document.getElementById('btnRight');
 
 let didAnimateResults = false; // animate only the first time results appear
 let initialActiveStates = []; // Track initial checkbox states
-let elementSelections = [];
 
 function sendToTab(message) {
   return new Promise((resolve) => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (!tabs || !tabs[0]) return resolve(null);
-      chrome.tabs.sendMessage(tabs[0].id, message, (res) => resolve(res || null));
+      const primary = tabs && tabs[0];
+      const isExtensionTab = primary && primary.url && primary.url.startsWith('chrome-extension://');
+
+      const send = (tab) => {
+        if (!tab) return resolve(null);
+        chrome.tabs.sendMessage(tab.id, message, (res) => resolve(res || null));
+      };
+
+      if (primary && !isExtensionTab) {
+        send(primary);
+        return;
+      }
+
+      chrome.tabs.query({ active: true, windowType: 'normal', lastFocusedWindow: true }, (fallbackTabs) => {
+        const pageTab = (fallbackTabs || []).find(tab => tab.url && !tab.url.startsWith('chrome-extension://')) || null;
+        if (pageTab) {
+          send(pageTab);
+        } else {
+          chrome.tabs.query({ windowType: 'normal' }, (allNormalTabs) => {
+            const firstNormal = (allNormalTabs || []).find(tab => tab.active);
+            send(firstNormal || allNormalTabs?.[0] || null);
+          });
+        }
+      });
     });
   });
 }
@@ -39,8 +60,8 @@ function setHeader(mode){
     btnRight.onclick = async () => {
       const list = document.querySelector('.list');
       const keepScroll = list ? list.scrollTop : 0;
-      const res = await sendToTab({ type:'typescope:reset' });
-      if (res?.ok) renderResults(res.summary, { preserveScroll: true, scrollTop: keepScroll, animate: false });
+      const res = await sendToTab({ type:'typoscope:reset' });
+      if (res?.ok) await renderResults(res.summary, { preserveScroll: true, scrollTop: keepScroll, animate: false });
     };
     document.addEventListener('keydown', onPopupEsc, true); // Add Esc handler
   }
@@ -51,7 +72,7 @@ function onPopupEsc(e) {
   if (e.key === 'Escape') {
     // Only act if in results mode
     if (document.body.classList.contains('results')) {
-      sendToTab({ type: 'typescope:clear' });
+      sendToTab({ type: 'typoscope:clear' });
       renderActions();
       e.stopPropagation();
       e.preventDefault();
@@ -66,7 +87,7 @@ async function renderActions(opts = {}){
   didAnimateResults = false; // <-- Reset animation state on home
   setHeader('default');
   removeHomeGrids();
-  if (clear) await sendToTab({ type: 'typescope:clear' });
+  if (clear) await sendToTab({ type: 'typoscope:clear' });
   mount.innerHTML = `
     <div class="home-layout">
       <div class="home-main">
@@ -88,28 +109,18 @@ async function renderActions(opts = {}){
               </span>
               <span class="label">Scan section</span>
             </button>
-            <button id="scanElement" class="btn btn-scan-section">
-              <span class="icon">
-<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M9.58335 4.16699V1.66699H8.75002V4.16699H9.58335Z" fill="#3D3D3D" style="fill:#3D3D3D;fill:color(display-p3 0.2392 0.2392 0.2392);fill-opacity:1;"/>
-<path d="M7.56512 7.56543L18.9372 12.0154L14.4873 14.4876L12.0151 18.9375L7.56512 7.56543Z" fill="#3D3D3D" style="fill:#3D3D3D;fill:color(display-p3 0.2392 0.2392 0.2392);fill-opacity:1;"/>
-<path d="M14.8862 4.03603L12.9963 5.92584L12.4071 5.33658L14.2969 3.44678L14.8862 4.03603Z" fill="#3D3D3D" style="fill:#3D3D3D;fill:color(display-p3 0.2392 0.2392 0.2392);fill-opacity:1;"/>
-<path d="M4.03638 14.8866L5.92619 12.9968L5.33693 12.4076L3.44713 14.2974L4.03638 14.8866Z" fill="#3D3D3D" style="fill:#3D3D3D;fill:color(display-p3 0.2392 0.2392 0.2392);fill-opacity:1;"/>
-<path d="M4.16669 9.58366H1.66669V8.75033H4.16669V9.58366Z" fill="#3D3D3D" style="fill:#3D3D3D;fill:color(display-p3 0.2392 0.2392 0.2392);fill-opacity:1;"/>
-<path d="M3.44707 4.03669L5.33687 5.9265L5.92613 5.33724L4.03632 3.44743L3.44707 4.03669Z" fill="#3D3D3D" style="fill:#3D3D3D;fill:color(display-p3 0.2392 0.2392 0.2392);fill-opacity:1;"/>
-</svg>
-              </span>
-              <span class="label">Scan element</span>
-            </button>
           </div>
-          <div class="home-credit">Designed by <a href="https://x.com/saugattttt" target="_blank" rel="noopener noreferrer">Saugat</a></div>
+          <a class="home-credit" href="https://x.com/saugattttt" target="_blank" rel="noopener noreferrer">
+            <span>Designed by</span>
+            <span class="home-credit-name">Saugat</span>
+          </a>
         </div>
       </div>
     </div>
   `;
 
   const colorPalette = [
-    '#ef4444','#f97316','#f59e0b','#84cc16','#22c55e','#14b8a6','#0ea5e9','#6366f1','#8b5cf6','#ec4899','#f43f5e'
+    '#3C9F56','#DC374F','#DF5E44','#33ACBC','#8356E2','#2CAC88','#4F71F6'
   ];
   const sizeChoices = [10,12,16,20,24,32,40,48];
   const card = document.querySelector('.ts-card');
@@ -177,21 +188,14 @@ async function renderActions(opts = {}){
   });
 
   document.getElementById('scanPage').addEventListener('click', async () => {
-    const res = await sendToTab({ type: 'typescope:scanPage' });
-    if (res?.ok) renderResults(res.summary, { animate: true });
+    const res = await sendToTab({ type: 'typoscope:scanPage' });
+    if (res?.ok) await renderResults(res.summary, { animate: true });
   });
   document.getElementById('scanRegion').addEventListener('click', async () => {
-    await sendToTab({ type: 'typescope:selectRegion' });
+    await sendToTab({ type: 'typoscope:selectRegion' });
     window.close(); // Close the popup so user can interact with the page
     // summary will be pushed; see listener below
   });
-  document.getElementById('scanElement').addEventListener('click', async () => {
-    await sendToTab({ type:'typescope:selectElement' });
-    window.close();
-  });
-
-  renderHomeSelectionsList();
-  loadElementSelections();
 }
 
 /* Helper: check if any group checkbox state has changed from initial */
@@ -202,7 +206,7 @@ function hasCheckboxStateChanged(summary) {
 
 /* results view */
 async function renderResults(summary, opts = {}) {
-  const { preserveScroll = false, scrollTop = 0, requestRefocus = false } = opts;
+  const { preserveScroll = false, scrollTop = 0 } = opts;
   const animate = opts.animate ?? true;
 
   setHeader('results');
@@ -334,18 +338,15 @@ async function renderResults(summary, opts = {}) {
     didAnimateResults = true;
   }
 
-  if (requestRefocus) {
-    await sendToTab({ type: 'typescope:refocusPage' });
-  }
 }
 
 /* toggle/update helpers — always preserve scroll */
 async function toggleGroup(idx, active){
   const list = document.querySelector('.list');
   const keepScroll = list ? list.scrollTop : 0;
-  const res = await sendToTab({ type:'typescope:toggleGroup', idx, active });
+  const res = await sendToTab({ type:'typoscope:toggleGroup', idx, active });
   if (res?.ok) {
-    renderResults(res.summary, { preserveScroll: true, scrollTop: keepScroll, animate: false });
+    await renderResults(res.summary, { preserveScroll: true, scrollTop: keepScroll, animate: false });
   }
 }
 
@@ -363,9 +364,9 @@ function openHuePicker(anchorEl, groupIdx, summary){
       ev.stopPropagation();
       const list = document.querySelector('.list');
       const keepScroll = list ? list.scrollTop : 0;
-      const res = await sendToTab({ type:'typescope:setHue', idx: groupIdx, hue: h });
+      const res = await sendToTab({ type:'typoscope:setHue', idx: groupIdx, hue: h });
       picker.style.display='none';
-      if (res?.ok) renderResults(res.summary, { preserveScroll: true, scrollTop: keepScroll, animate: false });
+      if (res?.ok) await renderResults(res.summary, { preserveScroll: true, scrollTop: keepScroll, animate: false });
     });
     picker.appendChild(cell);
   });
@@ -380,42 +381,28 @@ function openHuePicker(anchorEl, groupIdx, summary){
 }
 
 /* accept summaries pushed after section-pick (animate first time) */
-chrome.runtime.onMessage.addListener((msg) => {
-  if (msg?.type === 'typescope:summary') {
+chrome.runtime.onMessage.addListener(async (msg) => {
+  if (msg?.type === 'typoscope:summary') {
     didAnimateResults = false;
-    renderResults(msg.payload, { animate: true });
-  } else if (msg?.type === 'typescope:elementSelectionUpdate') {
-    elementSelections = msg.payload?.items || [];
-    renderHomeSelectionsList();
+    await renderResults(msg.payload, { animate: true });
   }
 });
 
 /* boot: show results if already scanned else homepage */
 (async () => {
   let summaryRes = null;
-  let pickerState = null;
 
   try {
-    summaryRes = await sendToTab({ type: 'typescope:getSummary' });
+    summaryRes = await sendToTab({ type: 'typoscope:getSummary' });
   } catch (err) {
     summaryRes = null;
   }
 
-  try {
-    pickerState = await sendToTab({ type: 'typescope:getElementPickerState' });
-  } catch (err) {
-    pickerState = null;
-  }
-
   if (summaryRes?.ok && summaryRes.summary?.groups?.length) {
     didAnimateResults = false; // <-- Always animate on boot if results
-    renderResults(summaryRes.summary, { animate: true });
+    await renderResults(summaryRes.summary, { animate: true });
     return;
   }
 
-  const hasSelections = !!pickerState?.ok && (pickerState.selectionCount > 0);
-  const isPicking = !!pickerState?.ok && pickerState.picking;
-  const shouldClear = !(hasSelections || isPicking);
-
-  renderActions({ clear: shouldClear });
+  renderActions();
 })();
