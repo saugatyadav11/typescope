@@ -15,29 +15,22 @@
       -moz-osx-font-smoothing: grayscale;
       font-smooth: never;
     }
-    body.results .ts-card{ max-height:680px; overflow:auto; }
-
     .ts-card{
       width:440px;
       background:#FFFFFF;
       border-radius:0px;
       padding:12px; box-sizing:border-box;
       display:flex; flex-direction:column; gap:12px;
-      overflow:auto;
+      overflow:hidden;
       position:relative;
       min-width:0; min-height:0;
       transition:none;
-      height:auto !important;
-      min-height:0 !important;
+      height:238px;
     }
     body:not(.results) .ts-card{
-      padding:0;
-      gap:0;
-      overflow:hidden;
+      padding:12px;
+      gap:12px;
     }
-    /* Remove .resize-bar styles */
-    .resize-bar { display: none !important; }
-
     /* Remove extra bottom padding from .actions and .row-actions if present */
     .row-actions { padding-bottom: 0 !important; }
     .actions { padding-bottom: 0 !important; }
@@ -45,12 +38,11 @@
     /* Header: fixed height 48px; 3 columns keep logo centered */
     .row-header{
       display:grid; grid-template-columns:32px 1fr 32px; align-items:center;
-      height:48px; padding:0px 12px;
+      height: 48px !important;; padding:8px 16px;
       position:relative; z-index:1;
       pointer-events:none;
     }
-    .row-header > *{ pointer-events:auto; }
-    body:not(.results) .row-header{ padding:12px 16px 0 16px; }
+    .row-header > *{ pointer-events:auto;   }
     .brand{ line-height:0; display:flex; justify-content:center; }
     .brand svg{ display:block; }
 
@@ -63,8 +55,7 @@
     .icon{line-height:0;display:inline-flex;}
 
     /* Homepage layout */
-    body:not(.results) #mount{flex:1; display:flex;}
-    body.results #mount{display:block;}
+    body:not(.results) #mount{display:flex; flex-direction:column; gap:12px;}
     .home-layout{
       position:relative;
       flex:1;
@@ -79,7 +70,7 @@
       display:flex;
       flex-direction:column;
       align-items:center;
-      padding:12px;
+      padding:0px 12px;
       box-sizing:border-box;
       min-width:240px;
       justify-content:center;
@@ -97,6 +88,9 @@
       gap:4px;
       width:100%;
       align-items:center;
+    }
+    .home-results-placeholder{
+      height:0;
     }
     .home-actions .btn{
       width:232px;
@@ -194,9 +188,28 @@
 
     /* Results list container: NO fill, NO shadow */
     .list{
+      position:relative;
       display:flex; flex-direction:column; gap:2px;
       background:transparent; box-shadow:none; border-radius:0;
-      overflow:auto; max-height:520px;
+      overflow:auto;
+      scrollbar-gutter:stable;
+    }
+    .list-fade{
+      position:sticky;
+      bottom:0;
+      left:0;
+      right:0;
+      height:80px;
+      pointer-events:none;
+      background:linear-gradient(180deg, rgba(255,255,255,0) 0%, #FFFFFF 100%);
+      opacity:0;
+      transition:opacity .18s ease;
+      z-index:5;
+      flex-shrink:0;
+      margin-top:-80px;
+    }
+    .list.list--fade .list-fade{
+      opacity:1;
     }
 
     .item{
@@ -378,84 +391,5 @@
     <div id="mount"></div>
   </div>
   <script src="popup.js"></script>
-  <script>
-    // Remove all resizing logic
-  </script>
-</body>
-</html>
-  </script>
-</body>
-</html>
-        </span>
-      </button>
-    </div>
-
-    <!-- everything else mounts here -->
-    <div id="mount"></div>
-    <div class="resize-bar" title="Resize height"></div>
-  </div>
-  <script src="popup.js"></script>
-  <script>
-    // --- Resizing logic for bottom bar (height) and width (side drag) ---
-    const card = document.querySelector('.ts-card');
-    const resizeBar = document.querySelector('.resize-bar');
-    let startY, startHeight, startX, startWidth, resizing = false, resizingW = false;
-
-    // Restore size from localStorage
-    (() => {
-      const h = +localStorage.getItem('ts-popup-height');
-      const w = +localStorage.getItem('ts-popup-width');
-      if (h > 320) card.style.height = h + 'px';
-      if (w > 320) card.style.width = w + 'px';
-    })();
-
-    // Height resize (bottom bar)
-    resizeBar.addEventListener('mousedown', e => {
-      resizing = true;
-      startY = e.clientY;
-      startHeight = card.offsetHeight;
-      document.body.style.userSelect = 'none';
-    });
-    window.addEventListener('mousemove', e => {
-      if (!resizing) return;
-      let newHeight = Math.max(320, startHeight + (e.clientY - startY));
-      card.style.height = newHeight + 'px';
-    });
-    window.addEventListener('mouseup', e => {
-      if (resizing) {
-        resizing = false;
-        document.body.style.userSelect = '';
-        localStorage.setItem('ts-popup-height', parseInt(card.offsetHeight, 10));
-      }
-    });
-
-    // Width resize (right edge, no handle, drag near right edge)
-    card.addEventListener('mousedown', e => {
-      if (e.offsetX > card.offsetWidth - 12) {
-        resizingW = true;
-        startX = e.clientX;
-        startWidth = card.offsetWidth;
-        document.body.style.userSelect = 'none';
-      }
-    });
-    window.addEventListener('mousemove', e => {
-      if (!resizingW) return;
-      let newWidth = Math.max(320, startWidth + (e.clientX - startX));
-      card.style.width = newWidth + 'px';
-    });
-    window.addEventListener('mouseup', e => {
-      if (resizingW) {
-        resizingW = false;
-        document.body.style.userSelect = '';
-        localStorage.setItem('ts-popup-width', parseInt(card.offsetWidth, 10));
-      }
-    });
-  </script>
-</body>
-</html>
-  </script>
-</body>
-</html>
-  </script>
 </body>
 </html>
