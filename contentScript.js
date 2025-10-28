@@ -31,8 +31,8 @@
         overflow: hidden;
         background: #FFF;
         background: color(display-p3 1 1 1);
-        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.06), 0 4px 12px 0 rgba(0, 0, 0, 0.04);
-        box-shadow: 0 1px 2px 0 color(display-p3 0 0 0 / 0.06), 0 4px 12px 0 color(display-p3 0 0 0 / 0.04);
+        box-shadow: 0 0 1px 0 rgba(0, 0, 0, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.06), 0 2px 4px 0 rgba(0, 0, 0, 0.06), 0 4px 12px 0 rgba(0, 0, 0, 0.12);
+        box-shadow: 0 0 1px 0 color(display-p3 0 0 0 / 0.06), 0 1px 2px 0 color(display-p3 0 0 0 / 0.06), 0 2px 4px 0 color(display-p3 0 0 0 / 0.06), 0 4px 12px 0 color(display-p3 0 0 0 / 0.12);
         z-index: 2147483647;
         display: none;
       }
