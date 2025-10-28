@@ -5,6 +5,111 @@
   if (window.__typoscopeLoaded) return;
   window.__typoscopeLoaded = true;
 
+  const PANEL_ID = '__typescope_panel';
+  const PANEL_STYLE_ID = '__typescope_panel_style';
+  const PANEL_DEFAULT_HEIGHT = 238;
+  const PANEL_MIN_HEIGHT = 160;
+  const PANEL_MAX_HEIGHT = 600;
+  let panelLastKnownHeight = PANEL_DEFAULT_HEIGHT;
+
+  function ensureInPagePanel() {
+    let panel = document.getElementById(PANEL_ID);
+    if (panel) return panel;
+
+    const panelStyle = document.getElementById(PANEL_STYLE_ID) || document.createElement('style');
+    panelStyle.id = PANEL_STYLE_ID;
+    panelStyle.textContent = `
+      #${PANEL_ID} {
+        position: fixed;
+        top: 12px;
+        right: 12px;
+        width: 440px;
+        max-width: calc(100vw - 48px);
+        height: min(${Math.max(PANEL_DEFAULT_HEIGHT, PANEL_MIN_HEIGHT)}px, calc(100vh - 48px));
+        max-height: min(${PANEL_MAX_HEIGHT}px, calc(100vh - 48px));
+        border-radius: 12px;
+        overflow: hidden;
+        background: #FFF;
+        background: color(display-p3 1 1 1);
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.06), 0 4px 12px 0 rgba(0, 0, 0, 0.04);
+        box-shadow: 0 1px 2px 0 color(display-p3 0 0 0 / 0.06), 0 4px 12px 0 color(display-p3 0 0 0 / 0.04);
+        z-index: 2147483647;
+        display: none;
+      }
+      #${PANEL_ID}.typoscope-visible {
+        display: block;
+      }
+      #${PANEL_ID} iframe {
+        border: 0;
+        width: 100%;
+        height: 100%;
+      }
+    `.trim();
+    const styleTarget = document.head || document.documentElement;
+    if (!document.getElementById(PANEL_STYLE_ID)) styleTarget.appendChild(panelStyle);
+
+    panel = document.createElement('div');
+    panel.id = PANEL_ID;
+    panel.setAttribute('role', 'complementary');
+    panel.setAttribute('aria-label', 'TypeScope panel');
+
+    const iframe = document.createElement('iframe');
+    iframe.src = chrome.runtime.getURL('popup.html');
+    iframe.setAttribute('title', 'TypeScope');
+    iframe.setAttribute('allow', 'clipboard-read; clipboard-write');
+    panel.appendChild(iframe);
+
+    document.documentElement.appendChild(panel);
+    const clampHeight = (height) => {
+      const windowCap = Math.max(PANEL_MIN_HEIGHT, window.innerHeight - 48);
+      const maxAllowed = Math.max(
+        PANEL_MIN_HEIGHT,
+        Math.min(windowCap, PANEL_MAX_HEIGHT)
+      );
+      const clamped = Math.min(Math.max(height, PANEL_MIN_HEIGHT), maxAllowed);
+      panelLastKnownHeight = clamped;
+      panel.style.height = `${clamped}px`;
+      panel.style.maxHeight = `min(${PANEL_MAX_HEIGHT}px, calc(100vh - 48px))`;
+    };
+
+    clampHeight(panelLastKnownHeight);
+
+    const extensionOrigin = chrome.runtime.getURL('').replace(/\/$/, '');
+    window.addEventListener('message', (event) => {
+      if (!event.data || event.data.type !== 'typescope:panel-resize') return;
+      if (event.origin !== extensionOrigin) return;
+      if (event.source !== iframe.contentWindow) return;
+      const height = Number(event.data.height);
+      if (!Number.isFinite(height)) return;
+      clampHeight(height);
+    }, true);
+
+    return panel;
+  }
+
+  const IN_PAGE_PANEL = ensureInPagePanel();
+  function showPanel() {
+    const windowCap = Math.max(PANEL_MIN_HEIGHT, window.innerHeight - 48);
+    const maxAllowed = Math.max(
+      PANEL_MIN_HEIGHT,
+      Math.min(windowCap, PANEL_MAX_HEIGHT)
+    );
+    IN_PAGE_PANEL.style.maxHeight = `min(${PANEL_MAX_HEIGHT}px, calc(100vh - 48px))`;
+    const max = Math.max(PANEL_MIN_HEIGHT, Math.min(maxAllowed, panelLastKnownHeight));
+    IN_PAGE_PANEL.style.height = `${max}px`;
+    IN_PAGE_PANEL.classList.add('typoscope-visible');
+  }
+  function hidePanel() {
+    IN_PAGE_PANEL.classList.remove('typoscope-visible');
+  }
+  function togglePanelVisibility() {
+    if (IN_PAGE_PANEL.classList.contains('typoscope-visible')) {
+      hidePanel();
+    } else {
+      showPanel();
+    }
+  }
+
   const STATE = {
     groups: [],
     groupsInitialSnapshot: [],
@@ -383,6 +488,10 @@
   let picking=false, pickerBox=null, pickerTip=null, pickedRoot=null;
   function startElementPicker(){
     if(picking) return; picking=true;
+    const panelEl = document.getElementById(PANEL_ID);
+    const prevPanelPointer = panelEl ? panelEl.style.pointerEvents : null;
+    if (panelEl) panelEl.style.pointerEvents = 'none';
+
     const tip=document.createElement('div');
     tip.textContent='Click a container to scan only that region • Press Esc to cancel';
     Object.assign(tip.style,{position:'fixed',top:'12px',left:'50%',transform:'translateX(-50%)',zIndex:'2147483647',background:'rgba(0,0,0,0.72)',color:'#fff',padding:'6px 10px',borderRadius:'800px',font:'12px Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif',border:'1px solid rgba(255,255,255,.24)', backdropFilter: 'blur(20px)',WebkitBackdropFilter: 'blur(20px)' }); document.body.appendChild(tip); pickerTip=tip;
@@ -394,7 +503,16 @@
       chrome.runtime.sendMessage({type:'typoscope:openPopup'});
     }
     function onKey(e){if(e.key==='Escape') cleanup();}
-    function cleanup(){picking=false;document.removeEventListener('mousemove',onMove,true);document.removeEventListener('click',onClick,true);document.removeEventListener('keydown',onKey,true); if(pickerBox)pickerBox.remove(); if(pickerTip)pickerTip.remove(); pickerBox=null; pickerTip=null;}
+    function cleanup(){
+      picking=false;
+      document.removeEventListener('mousemove',onMove,true);
+      document.removeEventListener('click',onClick,true);
+      document.removeEventListener('keydown',onKey,true);
+      if(pickerBox)pickerBox.remove();
+      if(pickerTip)pickerTip.remove();
+      if (panelEl && prevPanelPointer !== null) panelEl.style.pointerEvents = prevPanelPointer;
+      pickerBox=null; pickerTip=null;
+    }
     document.addEventListener('mousemove',onMove,true); document.addEventListener('click',onClick,true); document.addEventListener('keydown',onKey,true);
   }
 
@@ -465,6 +583,21 @@
       case 'typoscope:clear': {
         clearAll();
         sendResponse({ ok:true });
+        return true;
+      }
+      case 'typoscope:showPanel': {
+        showPanel();
+        sendResponse?.({ ok:true });
+        return true;
+      }
+      case 'typoscope:hidePanel': {
+        hidePanel();
+        sendResponse?.({ ok:true });
+        return true;
+      }
+      case 'typoscope:togglePanel': {
+        togglePanelVisibility();
+        sendResponse?.({ ok:true });
         return true;
       }
       default: break;

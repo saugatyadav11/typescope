@@ -5,7 +5,6 @@
   "description": "Scan typography styles from any webpage",
   "action": {
     "default_title": "TypScope",
-    "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/16.png",
       "32": "icons/32.png"
@@ -27,5 +26,11 @@
   "background": {
     "service_worker": "background.js"
   },
+  "web_accessible_resources": [
+    {
+      "resources": ["popup.html", "popup.js", "icons/*.png"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "permissions": ["tabs"]
 }

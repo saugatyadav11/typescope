@@ -7,6 +7,223 @@ const btnRight = document.getElementById('btnRight');
 let didAnimateResults = false; // animate only the first time results appear
 let initialActiveStates = []; // Track initial checkbox states
 
+const CARD_BASE_HEIGHT = 238;
+const CARD_RESULTS_MAX_HEIGHT = 600;
+const RESULTS_VISIBLE_ITEMS = 6.5;
+const DEFAULT_SPRING_CONFIG = {
+  stiffness: 600,
+  damping: 40,
+  mass: 1
+};
+const card = document.querySelector('.ts-card');
+let activeCardAnimation = null;
+let currentPanelHeight = CARD_BASE_HEIGHT;
+
+if (card) {
+  card.style.removeProperty('height');
+}
+
+function postPanelHeight(height) {
+  try {
+    if (window.parent && typeof window.parent.postMessage === 'function') {
+      const clamped = Math.max(
+        CARD_BASE_HEIGHT,
+        Math.min(Math.round(height), CARD_RESULTS_MAX_HEIGHT)
+      );
+      window.parent.postMessage({ type: 'typescope:panel-resize', height: clamped }, '*');
+      currentPanelHeight = clamped;
+    }
+  } catch (err) {
+    // ignored
+  }
+}
+
+postPanelHeight(CARD_BASE_HEIGHT);
+
+function getSpringConfig() {
+  const overrides = window.__typescopeSpringConfig || {};
+  const stiffness = Number(overrides.stiffness) || DEFAULT_SPRING_CONFIG.stiffness;
+  const damping = Number(overrides.damping) || DEFAULT_SPRING_CONFIG.damping;
+  const mass = Number(overrides.mass) || DEFAULT_SPRING_CONFIG.mass;
+  return { stiffness, damping, mass };
+}
+
+function animateCardHeight(targetHeight, { animate = true } = {}) {
+  if (!card) return;
+
+  const desired = Math.max(
+    CARD_BASE_HEIGHT,
+    Math.min(targetHeight, CARD_RESULTS_MAX_HEIGHT)
+  );
+
+  const applyTarget = () => {
+    postPanelHeight(desired);
+  };
+
+  let startHeight = currentPanelHeight;
+  if (activeCardAnimation?.cancel) {
+    activeCardAnimation.cancel({ snap: false });
+    startHeight = currentPanelHeight;
+  }
+
+  if (!animate || Math.abs(startHeight - desired) < 0.5) {
+    applyTarget();
+    return;
+  }
+
+  const { stiffness, damping, mass } = getSpringConfig();
+  const tolerance = 0.5;
+  const stopVelocity = 0.05;
+  let current = startHeight;
+  let velocity = 0;
+  let lastTime = null;
+
+  const animationState = {
+    frameId: null,
+    current,
+    cancel({ snap = true } = {}) {
+      if (this.frameId) cancelAnimationFrame(this.frameId);
+      if (snap) {
+        applyTarget();
+      } else {
+        const snapshot = typeof this.current === 'number' ? this.current : currentPanelHeight;
+        postPanelHeight(snapshot);
+      }
+      activeCardAnimation = null;
+    }
+  };
+
+  function step(timestamp) {
+    if (lastTime == null) lastTime = timestamp;
+    let delta = (timestamp - lastTime) / 1000;
+    lastTime = timestamp;
+    if (delta > 0.05) delta = 0.05;
+
+    const displacement = desired - current;
+    const springForce = stiffness * displacement;
+    const dampingForce = damping * velocity;
+    const acceleration = (springForce - dampingForce) / mass;
+
+    velocity += acceleration * delta;
+    const prev = current;
+    current += velocity * delta;
+
+    const crossed = (desired - prev) * (desired - current) <= 0;
+
+    animationState.current = current;
+    postPanelHeight(current);
+
+    if (Math.abs(displacement) < tolerance && Math.abs(velocity) < stopVelocity) {
+      applyTarget();
+      activeCardAnimation = null;
+      return;
+    }
+
+    if (crossed) {
+      applyTarget();
+      activeCardAnimation = null;
+      return;
+    }
+
+    animationState.frameId = requestAnimationFrame(step);
+  }
+
+  animationState.frameId = requestAnimationFrame(step);
+  activeCardAnimation = animationState;
+}
+
+function measureCardHeight() {
+  if (!card) return CARD_BASE_HEIGHT;
+  if (activeCardAnimation?.cancel) {
+    activeCardAnimation.cancel({ snap: true });
+  }
+  const next = Math.ceil(card.getBoundingClientRect().height);
+  return next;
+}
+
+function configureListHeight(list, groupCount) {
+  if (!list) return { listHeight: 0, approximateCardHeight: CARD_BASE_HEIGHT };
+
+  const firstItem = list.querySelector('.item');
+  if (!firstItem) {
+    list.style.removeProperty('height');
+    list.style.removeProperty('max-height');
+    list.dataset.fadeEnabled = 'false';
+    list.classList.remove('list--fade');
+    return { listHeight: 0, approximateCardHeight: CARD_BASE_HEIGHT };
+  }
+
+  const itemRect = firstItem.getBoundingClientRect();
+  const itemHeight = itemRect.height;
+  const styles = window.getComputedStyle(list);
+  const gap = parseFloat(styles.rowGap || styles.gap || '0') || 0;
+
+  const visibleItems = Math.min(groupCount, RESULTS_VISIBLE_ITEMS);
+  const fullCount = Math.floor(visibleItems);
+  const partial = visibleItems - fullCount;
+  const gapCount = Math.max(Math.ceil(visibleItems) - 1, 0);
+
+  const targetHeight = (fullCount * itemHeight) + (partial * itemHeight) + (gapCount * gap);
+
+  let maxListHeight = CARD_RESULTS_MAX_HEIGHT;
+  let cardExtras = 0;
+  if (card) {
+    const cardStyles = window.getComputedStyle(card);
+    const paddingTop = parseFloat(cardStyles.paddingTop || '0') || 0;
+    const paddingBottom = parseFloat(cardStyles.paddingBottom || '0') || 0;
+    const cardGap = parseFloat(cardStyles.rowGap || cardStyles.gap || '0') || 0;
+    const header = document.querySelector('.row-header');
+    const headerHeight = header ? header.getBoundingClientRect().height : 0;
+    cardExtras = paddingTop + paddingBottom + headerHeight + cardGap;
+    const available = CARD_RESULTS_MAX_HEIGHT - cardExtras;
+    if (available > 0) {
+      maxListHeight = available;
+    }
+  }
+
+  const boundedHeight = targetHeight > 0 ? Math.min(targetHeight, maxListHeight) : maxListHeight;
+
+  if (targetHeight > 0) {
+    list.style.height = `${boundedHeight}px`;
+    list.style.maxHeight = `${boundedHeight}px`;
+  } else {
+    list.style.removeProperty('height');
+    list.style.removeProperty('max-height');
+  }
+
+  list.dataset.fadeEnabled = 'pending';
+  list.classList.remove('list--fade');
+  requestAnimationFrame(() => {
+    if (!list || !list.isConnected) return;
+    const fadeEnabled = list.scrollHeight - list.clientHeight > 4;
+    list.dataset.fadeEnabled = fadeEnabled ? 'true' : 'false';
+    updateListFadeState(list);
+  });
+
+  return {
+    listHeight: boundedHeight,
+    approximateCardHeight: boundedHeight + cardExtras
+  };
+}
+
+function updateListFadeState(list) {
+  if (!list) return;
+  const fadeOverlay = list.querySelector('.list-fade');
+  if (list.dataset.fadeEnabled !== 'true') {
+    list.classList.remove('list--fade');
+    if (fadeOverlay) fadeOverlay.style.opacity = '0';
+    return;
+  }
+  const remaining = list.scrollHeight - list.scrollTop - list.clientHeight;
+  if (remaining > 4) {
+    list.classList.add('list--fade');
+    if (fadeOverlay) fadeOverlay.style.opacity = '1';
+  } else {
+    list.classList.remove('list--fade');
+    if (fadeOverlay) fadeOverlay.style.opacity = '0';
+  }
+}
+
 function sendToTab(message) {
   return new Promise((resolve) => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -55,7 +272,7 @@ function setHeader(mode){
   }else{
     document.body.classList.add('results');
     btnBack.style.visibility = 'visible';
-    btnBack.onclick = () => renderActions();
+    btnBack.onclick = () => renderActions({ animateHeight: true });
     btnRight.style.visibility = 'visible';
     btnRight.onclick = async () => {
       const list = document.querySelector('.list');
@@ -73,7 +290,7 @@ function onPopupEsc(e) {
     // Only act if in results mode
     if (document.body.classList.contains('results')) {
       sendToTab({ type: 'typoscope:clear' });
-      renderActions();
+      renderActions({ animateHeight: true });
       e.stopPropagation();
       e.preventDefault();
     }
@@ -82,7 +299,7 @@ function onPopupEsc(e) {
 
 /* default view (homepage) */
 async function renderActions(opts = {}){
-  const { clear = true } = opts;
+  const { clear = true, animateHeight = true } = opts;
   initialActiveStates = [];
   didAnimateResults = false; // <-- Reset animation state on home
   setHeader('default');
@@ -110,6 +327,7 @@ async function renderActions(opts = {}){
               <span class="label">Scan section</span>
             </button>
           </div>
+          <div class="home-results-placeholder"></div>
           <a class="home-credit" href="https://x.com/saugattttt" target="_blank" rel="noopener noreferrer">
             <span>Designed by</span>
             <span class="home-credit-name">Saugat</span>
@@ -123,7 +341,6 @@ async function renderActions(opts = {}){
     '#3C9F56','#DC374F','#DF5E44','#33ACBC','#8356E2','#2CAC88','#4F71F6'
   ];
   const sizeChoices = [10,12,16,20,24,32,40,48];
-  const card = document.querySelector('.ts-card');
   const main = document.querySelector('.home-main');
   const grids = (() => {
     if (!card) return [];
@@ -136,14 +353,13 @@ async function renderActions(opts = {}){
     return [left, right];
   })();
 
-  const cardRect = card?.getBoundingClientRect();
   grids.forEach(grid => {
     if (!grid) return;
     if (grid.classList.contains('home-grid-left')) grid.style.left = '0';
     if (grid.classList.contains('home-grid-right')) grid.style.right = '0';
   });
 
-  const totalHeight = cardRect ? cardRect.height : 0;
+  const totalHeight = CARD_BASE_HEIGHT;
   const rows = Math.max(10, Math.ceil((totalHeight + 80) / 40));
 
   grids.forEach(grid => {
@@ -187,6 +403,8 @@ async function renderActions(opts = {}){
     }
   });
 
+  animateCardHeight(CARD_BASE_HEIGHT, { animate: animateHeight });
+
   document.getElementById('scanPage').addEventListener('click', async () => {
     const res = await sendToTab({ type: 'typoscope:scanPage' });
     if (res?.ok) await renderResults(res.summary, { animate: true });
@@ -224,6 +442,8 @@ async function renderResults(summary, opts = {}) {
   mount.innerHTML = `<div class="list" id="list"></div>`;
   const list = document.getElementById('list');
   const { groups, tw } = summary;
+  const fadeOverlay = document.createElement('div');
+  fadeOverlay.className = 'list-fade';
 
   // Show/hide reset button based on checkbox state
   if (hasCheckboxStateChanged(summary)) {
@@ -328,10 +548,22 @@ async function renderResults(summary, opts = {}) {
     list.appendChild(row);
   });
 
+  list.appendChild(fadeOverlay);
+
+  const { approximateCardHeight } = configureListHeight(list, groups.length);
+
   // restore scroll position if asked
   if (preserveScroll) {
     list.scrollTop = scrollTop || keepScrollTop;
+  } else {
+    list.scrollTop = 0;
   }
+
+  list.addEventListener('scroll', () => updateListFadeState(list));
+
+  const measuredHeight = measureCardHeight();
+  const targetHeight = Math.max(CARD_BASE_HEIGHT, approximateCardHeight, measuredHeight);
+  animateCardHeight(targetHeight, { animate });
 
   // mark that we already ran the entry animation once
   if (!didAnimateResults && animate) {
@@ -404,5 +636,5 @@ chrome.runtime.onMessage.addListener(async (msg) => {
     return;
   }
 
-  renderActions();
+  renderActions({ animateHeight: false });
 })();
