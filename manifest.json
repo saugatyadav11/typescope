@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "typescope",
-  "version": "0.1.0",
-  "description": "Scan typography styles from any webpage",
+  "name": "TypeScope - Text Style Inspector",
+  "version": "0.2.0",
+  "description": "Scan any webpage for typography styles used. Detect fonts, size, line height, letter spacing and more",
   "action": {
-    "default_title": "TypScope",
+    "default_title": "TypeScope",
     "default_icon": {
       "16": "icons/16.png",
       "32": "icons/32.png"
