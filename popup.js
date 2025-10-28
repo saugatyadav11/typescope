@@ -6,6 +6,7 @@ const btnRight = document.getElementById('btnRight');
 
 let didAnimateResults = false; // animate only the first time results appear
 let initialActiveStates = []; // Track initial checkbox states
+let selectionActive = false;
 
 const CARD_BASE_HEIGHT = 238;
 const CARD_RESULTS_MAX_HEIGHT = 600;
@@ -193,9 +194,14 @@ function configureListHeight(list, groupCount) {
 
   list.dataset.fadeEnabled = 'pending';
   list.classList.remove('list--fade');
+  const fadeOverlay = list.querySelector('.list-fade');
+  if (fadeOverlay) {
+    fadeOverlay.style.opacity = '0';
+    fadeOverlay.style.display = 'none';
+  }
   requestAnimationFrame(() => {
     if (!list || !list.isConnected) return;
-    const fadeEnabled = list.scrollHeight - list.clientHeight > 4;
+    const fadeEnabled = list.scrollHeight - list.clientHeight > 1;
     list.dataset.fadeEnabled = fadeEnabled ? 'true' : 'false';
     updateListFadeState(list);
   });
@@ -209,18 +215,30 @@ function configureListHeight(list, groupCount) {
 function updateListFadeState(list) {
   if (!list) return;
   const fadeOverlay = list.querySelector('.list-fade');
-  if (list.dataset.fadeEnabled !== 'true') {
+  const fadeEnabled = list.dataset.fadeEnabled === 'true';
+
+  if (!fadeEnabled) {
     list.classList.remove('list--fade');
-    if (fadeOverlay) fadeOverlay.style.opacity = '0';
+    if (fadeOverlay) {
+      fadeOverlay.style.opacity = '0';
+      fadeOverlay.style.display = 'none';
+    }
     return;
   }
-  const remaining = list.scrollHeight - list.scrollTop - list.clientHeight;
-  if (remaining > 4) {
+
+  const remaining = Math.ceil(list.scrollHeight - list.scrollTop - list.clientHeight);
+  if (remaining > 1) {
     list.classList.add('list--fade');
-    if (fadeOverlay) fadeOverlay.style.opacity = '1';
+    if (fadeOverlay) {
+      fadeOverlay.style.display = 'block';
+      fadeOverlay.style.opacity = '1';
+    }
   } else {
     list.classList.remove('list--fade');
-    if (fadeOverlay) fadeOverlay.style.opacity = '0';
+    if (fadeOverlay) {
+      fadeOverlay.style.opacity = '0';
+      fadeOverlay.style.display = 'none';
+    }
   }
 }
 
@@ -268,7 +286,9 @@ function setHeader(mode){
     btnBack.onclick = null;
     btnRight.style.visibility = 'hidden';
     btnRight.onclick = null;
-    document.removeEventListener('keydown', onPopupEsc, true); // Remove Esc handler
+    // Ensure Esc closes the panel from home state too
+    document.removeEventListener('keydown', onPopupEsc, true);
+    document.addEventListener('keydown', onPopupEsc, true);
   }else{
     document.body.classList.add('results');
     btnBack.style.visibility = 'visible';
@@ -280,21 +300,37 @@ function setHeader(mode){
       const res = await sendToTab({ type:'typoscope:reset' });
       if (res?.ok) await renderResults(res.summary, { preserveScroll: true, scrollTop: keepScroll, animate: false });
     };
+    document.removeEventListener('keydown', onPopupEsc, true);
     document.addEventListener('keydown', onPopupEsc, true); // Add Esc handler
   }
 }
 
 // Esc handler for popup: clear overlays/results and go to default state on first Esc
-function onPopupEsc(e) {
-  if (e.key === 'Escape') {
-    // Only act if in results mode
-    if (document.body.classList.contains('results')) {
-      sendToTab({ type: 'typoscope:clear' });
-      renderActions({ animateHeight: true });
-      e.stopPropagation();
-      e.preventDefault();
-    }
+async function hidePanel({ clearPage = false } = {}) {
+  if (clearPage) {
+    await sendToTab({ type: 'typoscope:clear' });
   }
+  await sendToTab({ type: 'typoscope:hidePanel' });
+}
+
+async function onPopupEsc(e) {
+  if (e.key !== 'Escape') return;
+  e.stopPropagation();
+  e.preventDefault();
+
+  if (selectionActive) {
+    await sendToTab({ type: 'typoscope:cancelPicker' });
+    selectionActive = false;
+    return;
+  }
+
+  if (document.body.classList.contains('results')) {
+    await sendToTab({ type: 'typoscope:clear' });
+    await renderActions({ animateHeight: true, clear: false });
+    return;
+  }
+
+  await hidePanel({ clearPage: true });
 }
 
 /* default view (homepage) */
@@ -409,10 +445,12 @@ async function renderActions(opts = {}){
     const res = await sendToTab({ type: 'typoscope:scanPage' });
     if (res?.ok) await renderResults(res.summary, { animate: true });
   });
-  document.getElementById('scanRegion').addEventListener('click', async () => {
+  const scanRegionBtn = document.getElementById('scanRegion');
+  scanRegionBtn.addEventListener('click', async (event) => {
+    event.preventDefault();
+    scanRegionBtn.blur();
     await sendToTab({ type: 'typoscope:selectRegion' });
-    window.close(); // Close the popup so user can interact with the page
-    // summary will be pushed; see listener below
+    await sendToTab({ type: 'typoscope:focusPage' });
   });
 }
 
@@ -560,6 +598,7 @@ async function renderResults(summary, opts = {}) {
   }
 
   list.addEventListener('scroll', () => updateListFadeState(list));
+  updateListFadeState(list);
 
   const measuredHeight = measureCardHeight();
   const targetHeight = Math.max(CARD_BASE_HEIGHT, approximateCardHeight, measuredHeight);
@@ -614,9 +653,22 @@ function openHuePicker(anchorEl, groupIdx, summary){
 
 /* accept summaries pushed after section-pick (animate first time) */
 chrome.runtime.onMessage.addListener(async (msg) => {
-  if (msg?.type === 'typoscope:summary') {
-    didAnimateResults = false;
-    await renderResults(msg.payload, { animate: true });
+  if (!msg || !msg.type) return;
+  switch (msg.type) {
+    case 'typoscope:summary': {
+      didAnimateResults = false;
+      await renderResults(msg.payload, { animate: true });
+      break;
+    }
+    case 'typoscope:goHome': {
+      await renderActions({ animateHeight: true, clear: false });
+      break;
+    }
+    case 'typoscope:picker-active': {
+      selectionActive = !!msg.active;
+      break;
+    }
+    default: break;
   }
 });
 

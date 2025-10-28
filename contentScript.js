@@ -98,9 +98,11 @@
     const max = Math.max(PANEL_MIN_HEIGHT, Math.min(maxAllowed, panelLastKnownHeight));
     IN_PAGE_PANEL.style.height = `${max}px`;
     IN_PAGE_PANEL.classList.add('typoscope-visible');
+    attachEscListener();
   }
   function hidePanel() {
     IN_PAGE_PANEL.classList.remove('typoscope-visible');
+    detachEscListener();
   }
   function togglePanelVisibility() {
     if (IN_PAGE_PANEL.classList.contains('typoscope-visible')) {
@@ -385,7 +387,7 @@
 
     window.removeEventListener('scroll',scheduleBadgePositioning,true);
     window.removeEventListener('resize',scheduleBadgePositioning,true);
-    detachEscListener();
+    // keep ESC listener active while panel is visible; do not detach here
   }
 
   function scan(rootEl=null){
@@ -486,50 +488,74 @@
 
   /* -------- region picker (sends summary when done) -------- */
   let picking=false, pickerBox=null, pickerTip=null, pickedRoot=null;
+  let pickerPanelEl=null, pickerPrevPointer=null;
+  let pickerOnMove=null, pickerOnClick=null, pickerOnKey=null;
+
+  function stopElementPicker(){
+    if(!picking) return;
+    picking=false;
+    document.removeEventListener('mousemove',pickerOnMove,true);
+    document.removeEventListener('click',pickerOnClick,true);
+    document.removeEventListener('keydown',pickerOnKey,true);
+    pickerOnMove = pickerOnClick = pickerOnKey = null;
+    if(pickerBox) pickerBox.remove();
+    if(pickerTip) pickerTip.remove();
+    if (pickerPanelEl && pickerPrevPointer !== null) pickerPanelEl.style.pointerEvents = pickerPrevPointer;
+    pickerBox = pickerTip = null;
+    pickerPanelEl = null;
+    pickerPrevPointer = null;
+    chrome.runtime.sendMessage({ type: 'typoscope:picker-active', active: false });
+  }
+
   function startElementPicker(){
     if(picking) return; picking=true;
-    const panelEl = document.getElementById(PANEL_ID);
-    const prevPanelPointer = panelEl ? panelEl.style.pointerEvents : null;
-    if (panelEl) panelEl.style.pointerEvents = 'none';
+    pickerPanelEl = document.getElementById(PANEL_ID);
+    pickerPrevPointer = pickerPanelEl ? pickerPanelEl.style.pointerEvents : null;
+    if (pickerPanelEl) pickerPanelEl.style.pointerEvents = 'none';
 
     const tip=document.createElement('div');
     tip.textContent='Click a container to scan only that region • Press Esc to cancel';
     Object.assign(tip.style,{position:'fixed',top:'12px',left:'50%',transform:'translateX(-50%)',zIndex:'2147483647',background:'rgba(0,0,0,0.72)',color:'#fff',padding:'6px 10px',borderRadius:'800px',font:'12px Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif',border:'1px solid rgba(255,255,255,.24)', backdropFilter: 'blur(20px)',WebkitBackdropFilter: 'blur(20px)' }); document.body.appendChild(tip); pickerTip=tip;
     const box=document.createElement('div'); Object.assign(box.style,{position:'fixed',border:'2px solid #22d3ee',background:'rgba(34,211,238,0.08)',zIndex:'2147483646',pointerEvents:'none'}); document.body.appendChild(box); pickerBox=box;
     function positionBox(el){const r=el.getBoundingClientRect(); box.style.left=`${r.left}px`; box.style.top=`${r.top}px`; box.style.width=`${r.width}px`; box.style.height=`${r.height}px`;}
-    function onMove(e){const t=document.elementFromPoint(e.clientX,e.clientY); if(!t) return; const el=t.closest('*'); if(!el||el===document.documentElement||el===document.body||el===box) return; positionBox(el); pickedRoot=el;}
-    function onClick(e){e.preventDefault();e.stopPropagation(); cleanup(); scan(pickedRoot||document.body); chrome.runtime.sendMessage({type:'typoscope:summary', payload: summarize()});
+    pickerOnMove = function(e){const t=document.elementFromPoint(e.clientX,e.clientY); if(!t) return; const el=t.closest('*'); if(!el||el===document.documentElement||el===document.body||el===box) return; positionBox(el); pickedRoot=el;};
+    pickerOnClick = function(e){e.preventDefault();e.stopPropagation(); stopElementPicker(); scan(pickedRoot||document.body); chrome.runtime.sendMessage({type:'typoscope:summary', payload: summarize()});
       // Ask background to reopen the popup after scan is complete
       chrome.runtime.sendMessage({type:'typoscope:openPopup'});
-    }
-    function onKey(e){if(e.key==='Escape') cleanup();}
-    function cleanup(){
-      picking=false;
-      document.removeEventListener('mousemove',onMove,true);
-      document.removeEventListener('click',onClick,true);
-      document.removeEventListener('keydown',onKey,true);
-      if(pickerBox)pickerBox.remove();
-      if(pickerTip)pickerTip.remove();
-      if (panelEl && prevPanelPointer !== null) panelEl.style.pointerEvents = prevPanelPointer;
-      pickerBox=null; pickerTip=null;
-    }
-    document.addEventListener('mousemove',onMove,true); document.addEventListener('click',onClick,true); document.addEventListener('keydown',onKey,true);
+    };
+    pickerOnKey = function(e){if(e.key==='Escape'){ stopElementPicker(); }};
+    document.addEventListener('mousemove',pickerOnMove,true); document.addEventListener('click',pickerOnClick,true); document.addEventListener('keydown',pickerOnKey,true);
+    chrome.runtime.sendMessage({ type: 'typoscope:picker-active', active: true });
   }
 
   // --- Esc key clears overlays/results if present ---
   function onContentEscKey(e) {
-    if (e.key === 'Escape') {
-      // Only clear if overlays/results are present
-      if (STATE.groups && STATE.groups.length > 0) {
-        clearAll();
-      }
+    if (e.key !== 'Escape') return;
+    e.stopPropagation();
+    e.preventDefault();
+    if (picking) { // cancel selection mode immediately
+      stopElementPicker();
+      return;
+    }
+    if (STATE.groups && STATE.groups.length > 0) {
+      // Clear overlays and ask popup to go back to home view
+      clearAll();
+      try { chrome.runtime.sendMessage({ type: 'typoscope:goHome' }); } catch {}
+    } else {
+      // Nothing to clear: close the panel
+      try { hidePanel(); } catch {}
     }
   }
+  let panelEscAttached = false;
   function attachEscListener() {
+    if (panelEscAttached) return;
     window.addEventListener('keydown', onContentEscKey, true);
+    panelEscAttached = true;
   }
   function detachEscListener() {
+    if (!panelEscAttached) return;
     window.removeEventListener('keydown', onContentEscKey, true);
+    panelEscAttached = false;
   }
 
   /* ---------------- messaging API for popup ---------------- */
@@ -539,6 +565,22 @@
       case 'typoscope:scanPage': {
         scan();
         sendResponse({ ok:true, summary: summarize() });
+        return true;
+      }
+      case 'typoscope:focusPage': {
+        try {
+          if (!document.body.hasAttribute('tabindex')) {
+            document.body.setAttribute('tabindex','-1');
+          }
+          window.focus();
+          document.body.focus();
+        } catch {}
+        sendResponse({ ok:true });
+        return true;
+      }
+      case 'typoscope:cancelPicker': {
+        stopElementPicker();
+        sendResponse({ ok:true });
         return true;
       }
       case 'typoscope:getSummary': {
